@@ -3,6 +3,7 @@ import 'package:ace/chess_engine/move.dart';
 import 'package:ace/chess_engine/move_generator.dart';
 import 'package:ace/chess_engine/piece.dart';
 import 'package:ace/components/square.dart';
+import 'package:ace/tests/tests.dart';
 import 'package:flutter/material.dart';
 
 class GUI extends StatefulWidget {
@@ -23,14 +24,14 @@ class _GUIState extends State<GUI> {
 
   void onSquareTapped(int index) {
     setState(() {
-      game.select(index);
+      if (game.gameResult == Result.playing) {
+        game.select(index);
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    List<Move> possibleMoves = MoveGenerator().generateMoves(game.board);
-
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -64,7 +65,7 @@ class _GUIState extends State<GUI> {
                   // Check if square is valid move option
                   if (game.selectedIndex != null) {
                     List<Move> selectPieceMoves =
-                        possibleMoves.where((move) => move.startingSquare == game.selectedIndex).toList();
+                        game.legalMoves.where((move) => move.startingSquare == game.selectedIndex).toList();
 
                     for (var i = 0; i < selectPieceMoves.length; i++) {
                       Move move = selectPieceMoves[i];
@@ -89,6 +90,7 @@ class _GUIState extends State<GUI> {
                     builder: (context, candidateData, rejectedData) {
                       return Square(
                         index: index,
+                        isSquareAttacked: game.moveGenerator.opponentAttackMap.contains(index),
                         isWhite: isWhite,
                         isSelected: isSelected,
                         isSquareValid: isSquareValid,
@@ -111,6 +113,17 @@ class _GUIState extends State<GUI> {
                   );
                 },
               ),
+            ),
+            Text(game.gameResult.toString()),
+            game.gameResult == Result.playing
+                ? const SizedBox()
+                : ElevatedButton(
+                    onPressed: () => setState(() => game.reset()),
+                    child: Text("Reset"),
+                  ),
+            ElevatedButton(
+              onPressed: () => Tests.testMoveGeneration(game.board),
+              child: Text("Test move gen"),
             ),
           ],
         ),

@@ -13,6 +13,7 @@ class Square extends StatelessWidget {
   final bool isDraggable;
   final int index;
   final bool isSquareValid;
+  final bool isSquareAttacked;
 
   const Square({
     super.key,
@@ -26,6 +27,7 @@ class Square extends StatelessWidget {
     required this.index,
     required this.isSquareValid,
     required this.onDragableCancelled,
+    required this.isSquareAttacked,
   });
 
   @override
@@ -62,7 +64,19 @@ class Square extends StatelessWidget {
                   child: SizedBox(
                     width: MediaQuery.of(context).size.width / 8,
                     height: MediaQuery.of(context).size.width / 8,
-                    child: piece == 0 ? null : Piece.getImg(piece),
+                    child: Stack(
+                      children: [
+                        isSquareAttacked
+                            ? Container(
+                                width: MediaQuery.of(context).size.width / 8,
+                                height: MediaQuery.of(context).size.width / 8,
+                                color: Colors.red.withOpacity(0.2),
+                              )
+                            : const SizedBox(),
+                        Text(index.toString()),
+                        piece == 0 ? const SizedBox() : Piece.getImg(piece),
+                      ],
+                    ),
                   ),
                 ),
               )
@@ -71,30 +85,42 @@ class Square extends StatelessWidget {
                   width: MediaQuery.of(context).size.width / 8,
                   height: MediaQuery.of(context).size.width / 8,
                   // child: Text(index.toString()),
-                  child: piece == 0
-                      ? isSquareValid
+                  child: Stack(
+                    children: [
+                      isSquareAttacked
                           ? Container(
-                              margin: const EdgeInsets.all(15),
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.grey,
-                              ),
+                              width: MediaQuery.of(context).size.width / 8,
+                              height: MediaQuery.of(context).size.width / 8,
+                              color: Colors.red.withOpacity(0.2),
                             )
-                          : null
-                      : Stack(
-                          children: [
-                            Piece.getImg(piece),
-                            isSquareValid
-                                ? Container(
-                                    margin: const EdgeInsets.all(2),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(100),
-                                      border: Border.all(width: 5, color: Colors.grey.withOpacity(0.4)),
-                                    ),
-                                  )
-                                : const SizedBox(),
-                          ],
-                        ),
+                          : const SizedBox(),
+                      Text(index.toString()),
+                      piece == 0
+                          ? isSquareValid
+                              ? Container(
+                                  margin: const EdgeInsets.all(15),
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.grey,
+                                  ),
+                                )
+                              : const SizedBox()
+                          : Stack(
+                              children: [
+                                Piece.getImg(piece),
+                                isSquareValid
+                                    ? Container(
+                                        margin: const EdgeInsets.all(2),
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(100),
+                                          border: Border.all(width: 5, color: Colors.grey.withOpacity(0.4)),
+                                        ),
+                                      )
+                                    : const SizedBox(),
+                              ],
+                            ),
+                    ],
+                  ),
                 ),
               ),
       ),

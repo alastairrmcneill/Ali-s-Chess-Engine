@@ -18,7 +18,7 @@ class LoadedPositionInfo {
     blackCastleQueenSide = false;
     plyCount = 0;
     whiteToMove = false;
-    enPassantSquare = 0;
+    enPassantSquare = -1;
   }
 
   @override
