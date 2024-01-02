@@ -6,24 +6,24 @@ class Tests {
   static testMoveGeneration(Board board) {
     MoveGenerator moveGenerator = MoveGenerator();
     int testDepth = 5;
-    List<int> expectedResults = [
-      0,
-      20,
-      400,
-      8902,
-      197281,
-      4865609,
-      119060324,
-    ];
     // List<int> expectedResults = [
     //   0,
-    //   46,
-    //   2079,
-    //   89890,
-    //   3894594,
-    //   164075551,
-    //   706045033,
+    //   20,
+    //   400,
+    //   8902,
+    //   197281,
+    //   4865609,
+    //   119060324,
     // ];
+    List<int> expectedResults = [
+      0,
+      44,
+      1486,
+      62379,
+      2103487,
+      89941194,
+      11030083,
+    ];
 
     for (int depth = 1; depth <= testDepth; depth++) {
       int numMoves = 0;
@@ -38,9 +38,7 @@ class Tests {
   }
 
   static int _search(MoveGenerator moveGenerator, Board board, int depth) {
-    // List<Move> moves = moveGenerator.generateMoves(board);
-
-    List<Move> moves = moveGenerator.generateLegalMoves(board);
+    List<Move> moves = moveGenerator.generateLegalMoves2(board);
 
     if (depth == 1) {
       return moves.length;
@@ -51,7 +49,8 @@ class Tests {
         int numMovesAfterThisMove = _search(moveGenerator, board, depth - 1);
         numMovesForThisPosition += numMovesAfterThisMove;
         board.unMakeMove(move);
-        // if (depth == 4) {
+
+        // if (depth == 2) {
         //   print("${move.toChessNotation()} - $numMovesAfterThisMove");
         // }
       }

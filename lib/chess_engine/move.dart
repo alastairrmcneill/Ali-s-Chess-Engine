@@ -47,6 +47,6 @@ class Move {
 
   @override
   String toString() {
-    return "From: $startingSquare To: $targetSquare - EnPassant $enPassantCapture, PawnTwoForward: $pawnTwoForward";
+    return "From: $startingSquare To: $targetSquare - EnPassantCapture $enPassantCapture, PawnTwoForward: $pawnTwoForward";
   }
 }

@@ -113,7 +113,7 @@ class Square extends StatelessWidget {
                                         margin: const EdgeInsets.all(2),
                                         decoration: BoxDecoration(
                                           borderRadius: BorderRadius.circular(100),
-                                          border: Border.all(width: 5, color: Colors.grey.withOpacity(0.4)),
+                                          border: Border.all(width: 5, color: Colors.grey.withOpacity(0.7)),
                                         ),
                                       )
                                     : const SizedBox(),

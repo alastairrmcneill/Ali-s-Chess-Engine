@@ -90,7 +90,7 @@ class _GUIState extends State<GUI> {
                     builder: (context, candidateData, rejectedData) {
                       return Square(
                         index: index,
-                        isSquareAttacked: game.moveGenerator.opponentAttackMap.contains(index),
+                        isSquareAttacked: false, //game.moveGenerator.opponentAttackMap.contains(index),
                         isWhite: isWhite,
                         isSelected: isSelected,
                         isSquareValid: isSquareValid,

@@ -27,6 +27,18 @@ class Piece {
     return piece & typeMask;
   }
 
+  static bool isQueenOrBishop(int piece) {
+    int pieceType = Piece.pieceType(piece);
+
+    return (pieceType == queen || pieceType == bishop);
+  }
+
+  static bool isQueenOrRook(int piece) {
+    int pieceType = Piece.pieceType(piece);
+
+    return (pieceType == queen || pieceType == rook);
+  }
+
   static Widget getImg(int piece) {
     String imgString = "";
     if (isColor(piece, white)) {

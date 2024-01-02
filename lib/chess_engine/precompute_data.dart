@@ -6,11 +6,15 @@ class PrecomputeData {
   late List<List<int>> numSquaresToEdge;
   late List<List<int>> knightMoves;
   late List<List<int>> kingMoves;
+  late List<List<int>> whitePawnCaptures;
+  late List<List<int>> blackPawnCaptures;
 
   PrecomputeData() {
     numSquaresToEdge = List.generate(64, (index) => []);
     knightMoves = List.generate(64, (index) => []);
     kingMoves = List.generate(64, (index) => []);
+    whitePawnCaptures = List.generate(64, (index) => []);
+    blackPawnCaptures = List.generate(64, (index) => []);
 
     for (int index = 0; index < 64; index++) {
       int rank = index ~/ 8;
@@ -56,6 +60,44 @@ class PrecomputeData {
           if ((targetIndexCol - startingIndexCol).abs() <= 2) {
             knightMoves[index].add(targetIndex);
           }
+        }
+      }
+
+      // White pawn captures
+      whitePawnCaptures[index] = [];
+
+      int targetIndexCaptureLeft = index - 8 - 1;
+      int targetIndexCaptureRight = index - 8 + 1;
+
+      if (targetIndexCaptureLeft >= 0 && targetIndexCaptureLeft < 64) {
+        int targetIndexCaptureLeftCol = targetIndexCaptureLeft % 8;
+        if ((targetIndexCaptureLeftCol - file).abs() == 1) {
+          whitePawnCaptures[index].add(targetIndexCaptureLeft);
+        }
+      }
+      if (targetIndexCaptureRight >= 0 && targetIndexCaptureRight < 64) {
+        int targetIndexCaptureLeftCol = targetIndexCaptureRight % 8;
+        if ((targetIndexCaptureLeftCol - file).abs() == 1) {
+          whitePawnCaptures[index].add(targetIndexCaptureRight);
+        }
+      }
+
+      // White pawn captures
+      blackPawnCaptures[index] = [];
+
+      targetIndexCaptureLeft = index + 8 - 1;
+      targetIndexCaptureRight = index + 8 + 1;
+
+      if (targetIndexCaptureLeft >= 0 && targetIndexCaptureLeft < 64) {
+        int targetIndexCaptureLeftCol = targetIndexCaptureLeft % 8;
+        if ((targetIndexCaptureLeftCol - file).abs() == 1) {
+          blackPawnCaptures[index].add(targetIndexCaptureLeft);
+        }
+      }
+      if (targetIndexCaptureRight >= 0 && targetIndexCaptureRight < 64) {
+        int targetIndexCaptureLeftCol = targetIndexCaptureRight % 8;
+        if ((targetIndexCaptureLeftCol - file).abs() == 1) {
+          blackPawnCaptures[index].add(targetIndexCaptureRight);
         }
       }
     }

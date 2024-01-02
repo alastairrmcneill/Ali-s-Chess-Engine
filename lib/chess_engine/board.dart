@@ -37,7 +37,8 @@ class Board {
   }
 
   loadFromCustomPosition() {
-    LoadedPositionInfo loadedPositionInfo = FENUtility.loadPositionFromFEN("4R3/4k3/8/8/8/8/8/1KR5 b - - 0 1");
+    LoadedPositionInfo loadedPositionInfo =
+        FENUtility.loadPositionFromFEN("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8");
     position = loadedPositionInfo.position;
     whiteToPlay = loadedPositionInfo.whiteToMove;
     enPassantSquare = loadedPositionInfo.enPassantSquare;
@@ -57,6 +58,8 @@ class Board {
     int capturedPiece = position[move.targetSquare];
     int color = whiteToPlay ? Piece.white : Piece.black;
 
+    gameState.enPassantSquare = enPassantSquare;
+
     gameState.capturedPiece = capturedPiece;
     if (move.pawnTwoForward) {
       int direction = whiteToPlay ? -8 : 8;
@@ -64,7 +67,6 @@ class Board {
     } else {
       enPassantSquare = -1;
     }
-    gameState.enPassantSquare = enPassantSquare;
 
     // Handle promotion
     if (move.promotion != 0) {
@@ -155,12 +157,6 @@ class Board {
     gameStateHistory.add(gameState);
 
     positionRepetitionHistory.add(List.from(position));
-
-    // print(gameState.toString());
-    // print("Game state after make move:");
-    // for (GameState gameStateEntry in gameStateHistory) {
-    //   print(gameStateEntry.toString());
-    // }
   }
 
   unMakeMove(Move move) {
@@ -246,14 +242,12 @@ class Board {
       enPassantSquare = move.targetSquare;
     }
 
+    enPassantSquare = gameStateHistory.last.enPassantSquare;
+
     fiftyMoveRule = gameStateHistory.last.fiftyMoveRule;
     gameStateHistory.removeLast();
 
     positionRepetitionHistory.removeLast();
-    // print("Game state after un make move:");
-    // for (GameState gameStateEntry in gameStateHistory) {
-    //   print(gameStateEntry.toString());
-    // }
     position[move.startingSquare] = selectedPiece;
     position[move.targetSquare] = capturedPiece;
     whiteToPlay = !whiteToPlay;
