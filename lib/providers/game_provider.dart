@@ -2,105 +2,110 @@ import 'package:ace/chess_engine/board.dart';
 import 'package:ace/chess_engine/move.dart';
 import 'package:ace/chess_engine/move_generator.dart';
 import 'package:ace/chess_engine/piece.dart';
+import 'package:flutter/material.dart';
 
-class Game {
-  late MoveGenerator moveGenerator;
-  late Board board;
-  late List<Move> legalMoves;
-  late int? selectedIndex;
-  late Result gameResult;
-
-  Game() {
-    board = Board();
-    moveGenerator = MoveGenerator();
-    selectedIndex = null;
-    gameResult = Result.playing;
-    legalMoves = [];
-    legalMoves = moveGenerator.generateLegalMoves2(board);
-  }
+class GameProvider extends ChangeNotifier {
+  Board _board = Board();
+  MoveGenerator _moveGenerator = MoveGenerator();
+  int? _selectedIndex = null;
+  Result _gameResult = Result.playing;
+  List<Move> _legalMoves = [];
 
   reset() {
-    board = Board();
-    moveGenerator = MoveGenerator();
-    selectedIndex = null;
-    gameResult = Result.playing;
-    legalMoves = [];
-    legalMoves = moveGenerator.generateLegalMoves2(board);
+    _board = Board();
+    _moveGenerator = MoveGenerator();
+    _selectedIndex = null;
+    _gameResult = Result.playing;
+    _legalMoves = [];
+    _legalMoves = _moveGenerator.generateLegalMoves2(_board);
   }
 
-  bool isWhiteToPlay() {
-    return board.whiteToPlay;
+  Board get board => _board;
+  Result get gameResult => _gameResult;
+  bool get whiteToPlay => _board.whiteToPlay;
+  int? get selectedIndex => _selectedIndex;
+  List<Move> get legalMoves => _legalMoves;
+
+  set selectedIndex(int? index) {
+    _selectedIndex = index;
+    notifyListeners();
   }
 
   select(int index) {
-    if (selectedIndex != null) {
+    if (_selectedIndex != null) {
       // If something has been selected already then try to see if we can move there
       bool result = move(index);
       if (!result) {
-        selectedIndex = null;
+        _selectedIndex = null;
         select(index);
       }
     } else {
       // If not then set this peiece to be selected, unless its an empty square and set selected to be null
-      if (board.position[index] == 0) {
-        selectedIndex = null;
+      if (_board.position[index] == 0) {
+        _selectedIndex = null;
       } else {
-        if ((isWhiteToPlay() && Piece.isColor(board.position[index], Piece.white)) ||
-            (!isWhiteToPlay() && Piece.isColor(board.position[index], Piece.black))) {
-          selectedIndex = index;
+        if ((_board.whiteToPlay && Piece.isColor(_board.position[index], Piece.white)) ||
+            (!_board.whiteToPlay && Piece.isColor(_board.position[index], Piece.black))) {
+          _selectedIndex = index;
         }
       }
     }
-  }
-
-  bool isMoveValid(int targetIndex) {
-    List<Move> legalMoves = moveGenerator.generateLegalMoves2(board);
-
-    for (var move in legalMoves) {
-      if (move.startingSquare == selectedIndex && move.targetSquare == targetIndex) {
-        return true;
-      }
-    }
-    return false;
+    notifyListeners();
   }
 
   move(int targetIndex) {
     for (var move in legalMoves) {
-      if (move.startingSquare == selectedIndex && move.targetSquare == targetIndex) {
-        board.makeMove(move);
+      if (move.startingSquare == _selectedIndex && move.targetSquare == targetIndex) {
+        _board.makeMove(move);
         // board.unMakeMove(move);
-        selectedIndex = null;
-        getGameResult();
+        _selectedIndex = null;
+        _getGameResult();
+        notifyListeners();
 
+        // Start playing some AI moves?
         return true;
       }
     }
+    notifyListeners();
     return false;
   }
 
-  getGameResult() {
+  bool isMoveValid(int targetIndex) {
+    List<Move> legalMoves = _moveGenerator.generateLegalMoves2(board);
+
+    for (var move in legalMoves) {
+      if (move.startingSquare == selectedIndex && move.targetSquare == targetIndex) {
+        notifyListeners();
+        return true;
+      }
+    }
+    notifyListeners();
+    return false;
+  }
+
+  _getGameResult() {
     // Check checkmate and stalemate
     // print("Get Game Result");
-    legalMoves = moveGenerator.generateLegalMoves2(board);
+    _legalMoves = _moveGenerator.generateLegalMoves2(_board);
     if (legalMoves.isEmpty) {
-      if (moveGenerator.opponentAttackMap.contains(moveGenerator.opponentKingIndex)) {
-        gameResult = board.whiteToPlay ? Result.whiteIsMated : Result.blackIsMated;
+      if (_moveGenerator.opponentAttackMap.contains(_moveGenerator.opponentKingIndex)) {
+        _gameResult = _board.whiteToPlay ? Result.whiteIsMated : Result.blackIsMated;
         return;
       }
-      gameResult = Result.stalemate;
+      _gameResult = Result.stalemate;
       return;
     }
 
     // Check 50 moves
-    if (board.fiftyMoveRule >= 100) {
-      gameResult = Result.fiftyMoveRule;
+    if (_board.fiftyMoveRule >= 100) {
+      _gameResult = Result.fiftyMoveRule;
       return;
     }
 
     // Check 3 repetition
     Map<String, int> occurrenceMap = {};
 
-    for (var list in board.positionRepetitionHistory) {
+    for (var list in _board.positionRepetitionHistory) {
       // Convert the list to a string to use as a key in the map
       String key = list.toString();
 
@@ -113,7 +118,7 @@ class Game {
 
       // Check if this list has occurred 3 times
       if (occurrenceMap[key] == 3) {
-        gameResult = Result.repeition;
+        _gameResult = Result.repeition;
         return;
       }
     }
@@ -127,8 +132,8 @@ class Game {
     int numKnights = 0;
     int numPawns = 0;
 
-    for (int i = 0; i < board.position.length; i++) {
-      int piece = board.position[i];
+    for (int i = 0; i < _board.position.length; i++) {
+      int piece = _board.position[i];
 
       int pieceType = Piece.pieceType(piece);
       switch (pieceType) {
@@ -154,11 +159,11 @@ class Game {
     }
 
     if (numPawns + numRooks + numQueens + numKnights + numBishops == 0) {
-      gameResult = Result.insufficientMaterial;
+      _gameResult = Result.insufficientMaterial;
       return;
     } else if (numPawns + numRooks + numQueens == 0) {
       if (numKnights == 1 || numBishops == 1) {
-        gameResult = Result.insufficientMaterial;
+        _gameResult = Result.insufficientMaterial;
         return;
       }
 
@@ -172,7 +177,7 @@ class Game {
         int blackSquareColor = (blackBishopFile + blackBishopRank) % 2;
 
         if (whiteSquareColor == blackSquareColor) {
-          gameResult = Result.insufficientMaterial;
+          _gameResult = Result.insufficientMaterial;
           return;
         }
       }
@@ -180,7 +185,7 @@ class Game {
 
     // If all pass then we are still playing
 
-    gameResult = Result.playing;
+    _gameResult = Result.playing;
   }
 }
 

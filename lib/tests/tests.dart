@@ -6,24 +6,24 @@ class Tests {
   static testMoveGeneration(Board board) {
     MoveGenerator moveGenerator = MoveGenerator();
     int testDepth = 5;
-    // List<int> expectedResults = [
-    //   0,
-    //   20,
-    //   400,
-    //   8902,
-    //   197281,
-    //   4865609,
-    //   119060324,
-    // ];
     List<int> expectedResults = [
       0,
-      44,
-      1486,
-      62379,
-      2103487,
-      89941194,
-      11030083,
+      20,
+      400,
+      8902,
+      197281,
+      4865609,
+      119060324,
     ];
+    // List<int> expectedResults = [
+    //   0,
+    //   44,
+    //   1486,
+    //   62379,
+    //   2103487,
+    //   89941194,
+    //   11030083,
+    // ];
 
     for (int depth = 1; depth <= testDepth; depth++) {
       int numMoves = 0;

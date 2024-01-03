@@ -1,10 +1,12 @@
-import 'package:ace/chess_engine/game_manager.dart';
+// import 'package:ace/chess_engine/game_manager.dart';
 import 'package:ace/chess_engine/move.dart';
 import 'package:ace/chess_engine/move_generator.dart';
 import 'package:ace/chess_engine/piece.dart';
 import 'package:ace/components/square.dart';
+import 'package:ace/providers/game_provider.dart';
 import 'package:ace/tests/tests.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 class GUI extends StatefulWidget {
   const GUI({super.key});
@@ -14,29 +16,37 @@ class GUI extends StatefulWidget {
 }
 
 class _GUIState extends State<GUI> {
-  late Game game;
+  // late Game game;
 
   @override
   void initState() {
     super.initState();
-    game = Game();
+    // game = Game();
+    GameProvider gameProvider = Provider.of<GameProvider>(context, listen: false);
+    gameProvider.reset();
   }
 
-  void onSquareTapped(int index) {
-    setState(() {
-      if (game.gameResult == Result.playing) {
-        game.select(index);
-      }
-    });
+  void onSquareTapped(GameProvider gameProvider, int index) {
+    if (gameProvider.gameResult == Result.playing) {
+      gameProvider.select(index);
+    }
+
+    // setState(() {
+    //   if (gameProvider.gameResult == Result.playing) {
+    //     gameProvider.select(index);
+    //   }
+    // });
   }
 
   @override
   Widget build(BuildContext context) {
+    GameProvider gameProvider = Provider.of<GameProvider>(context);
+
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
-            Text("Turn: ${game.isWhiteToPlay() ? "White" : "Black"}"),
+            Text("Turn: ${gameProvider.whiteToPlay ? "White" : "Black"}"),
             Expanded(
               flex: 1,
               child: GridView.builder(
@@ -47,25 +57,26 @@ class _GUIState extends State<GUI> {
                   int row = index ~/ 8;
                   int col = index % 8;
                   bool isWhite = (row + col) % 2 == 0;
-                  bool isSelected = index == game.selectedIndex;
+                  bool isSelected = index == gameProvider.selectedIndex;
                   bool isSquareValid = false;
 
                   bool isDraggable = false;
                   // If peice is white and whites turn
-                  if ((Piece.color(game.board.position[index]) == Piece.white && game.isWhiteToPlay())) {
+                  if ((Piece.color(gameProvider.board.position[index]) == Piece.white && gameProvider.whiteToPlay)) {
                     isDraggable = true;
                   }
 
                   // Or Piece is black and blacks turn
 
-                  if ((Piece.color(game.board.position[index]) == Piece.black && !game.isWhiteToPlay())) {
+                  if ((Piece.color(gameProvider.board.position[index]) == Piece.black && !gameProvider.whiteToPlay)) {
                     isDraggable = true;
                   }
 
                   // Check if square is valid move option
-                  if (game.selectedIndex != null) {
-                    List<Move> selectPieceMoves =
-                        game.legalMoves.where((move) => move.startingSquare == game.selectedIndex).toList();
+                  if (gameProvider.selectedIndex != null) {
+                    List<Move> selectPieceMoves = gameProvider.legalMoves
+                        .where((move) => move.startingSquare == gameProvider.selectedIndex)
+                        .toList();
 
                     for (var i = 0; i < selectPieceMoves.length; i++) {
                       Move move = selectPieceMoves[i];
@@ -79,13 +90,15 @@ class _GUIState extends State<GUI> {
 
                   return DragTarget<int>(
                     onAccept: (receivedPiece) {
-                      setState(() {
-                        game.move(index);
-                      });
+                      gameProvider.move(index);
+
+                      // setState(() {
+                      //   gameProvider.move(index);
+                      // });
                     },
                     onWillAccept: (data) {
                       // Decide if I can land here
-                      return game.isMoveValid(index);
+                      return gameProvider.isMoveValid(index);
                     },
                     builder: (context, candidateData, rejectedData) {
                       return Square(
@@ -95,18 +108,14 @@ class _GUIState extends State<GUI> {
                         isSelected: isSelected,
                         isSquareValid: isSquareValid,
                         isDraggable: isDraggable,
-                        piece: game.board.position[index],
-                        onTap: () => onSquareTapped(index),
-                        onDragComplete: () => game.board.position[index] = 0,
+                        piece: gameProvider.board.position[index],
+                        onTap: () => onSquareTapped(gameProvider, index),
+                        onDragComplete: () => gameProvider.board.position[index] = 0,
                         onDragStarted: () {
-                          setState(() {
-                            game.selectedIndex = index;
-                          });
+                          gameProvider.selectedIndex = index;
                         },
                         onDragableCancelled: (p0, p1) {
-                          setState(() {
-                            game.selectedIndex = null;
-                          });
+                          gameProvider.selectedIndex = null;
                         },
                       );
                     },
@@ -114,15 +123,15 @@ class _GUIState extends State<GUI> {
                 },
               ),
             ),
-            Text(game.gameResult.toString()),
-            game.gameResult == Result.playing
+            Text(gameProvider.gameResult.toString()),
+            gameProvider.gameResult == Result.playing
                 ? const SizedBox()
                 : ElevatedButton(
-                    onPressed: () => setState(() => game.reset()),
+                    onPressed: () => setState(() => gameProvider.reset()),
                     child: Text("Reset"),
                   ),
             ElevatedButton(
-              onPressed: () => Tests.testMoveGeneration(game.board),
+              onPressed: () => Tests.testMoveGeneration(gameProvider.board),
               child: Text("Test move gen"),
             ),
           ],
