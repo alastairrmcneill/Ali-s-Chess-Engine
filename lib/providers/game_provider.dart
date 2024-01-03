@@ -1,4 +1,5 @@
 import 'package:ace/chess_engine/board.dart';
+import 'package:ace/chess_engine/engine.dart';
 import 'package:ace/chess_engine/move.dart';
 import 'package:ace/chess_engine/move_generator.dart';
 import 'package:ace/chess_engine/piece.dart';
@@ -61,13 +62,22 @@ class GameProvider extends ChangeNotifier {
         _selectedIndex = null;
         _getGameResult();
         notifyListeners();
-
-        // Start playing some AI moves?
+        _aiMove();
         return true;
       }
     }
     notifyListeners();
     return false;
+  }
+
+  _aiMove() {
+// Start playing some AI moves?
+    if (gameResult == Result.playing) {
+      Move engineMove = Engine.getBestMove(board);
+      _board.makeMove(engineMove);
+      _getGameResult();
+      notifyListeners();
+    }
   }
 
   bool isMoveValid(int targetIndex) {
