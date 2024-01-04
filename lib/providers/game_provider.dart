@@ -13,6 +13,8 @@ class GameProvider extends ChangeNotifier {
   Result _gameResult = Result.playing;
   List<Move> _legalMoves = [];
   Evaluation _evaluation = Evaluation();
+  Engine _engine = Engine();
+  bool _engineThinking = false;
 
   reset() {
     _board = Board();
@@ -21,6 +23,7 @@ class GameProvider extends ChangeNotifier {
     _gameResult = Result.playing;
     _legalMoves = [];
     _legalMoves = _moveGenerator.generateLegalMoves(_board);
+    _engineThinking = false;
   }
 
   Board get board => _board;
@@ -30,19 +33,26 @@ class GameProvider extends ChangeNotifier {
   int? get selectedIndex => _selectedIndex;
   List<Move> get legalMoves => _legalMoves;
   int get currentEval => _evaluation.evaluate(_board);
+  int get numPositionsEvaluated => _engine.positionsEvaluated;
+  Duration get searchDuration => _engine.searchDuration;
+  bool get engineThinking => _engineThinking;
 
   set selectedIndex(int? index) {
     _selectedIndex = index;
     notifyListeners();
   }
 
-  select(int index) {
+  setEngineThinking(bool thinking) {
+    _engineThinking = thinking;
+  }
+
+  Future select(int index) async {
     if (_selectedIndex != null) {
       // If something has been selected already then try to see if we can move there
-      bool result = move(index);
+      bool result = await move(index);
       if (!result) {
         _selectedIndex = null;
-        select(index);
+        await select(index);
       }
     } else {
       // If not then set this peiece to be selected, unless its an empty square and set selected to be null
@@ -55,29 +65,36 @@ class GameProvider extends ChangeNotifier {
         }
       }
     }
-    notifyListeners();
+    await updateDisplay();
   }
 
-  move(int targetIndex) {
+  Future move(int targetIndex) async {
     for (var move in legalMoves) {
       if (move.startingSquare == _selectedIndex && move.targetSquare == targetIndex) {
         _board.makeMove(move);
         // board.unMakeMove(move);
         _selectedIndex = null;
         _getGameResult();
-        notifyListeners();
-        _aiMove();
+        await updateDisplay();
+
+        await _aiMove();
         return true;
       }
     }
-    notifyListeners();
+    await updateDisplay();
     return false;
   }
 
   Future _aiMove() async {
     // Start playing some AI moves?
     if (gameResult == Result.playing) {
-      Move engineMove = Engine.getBestMove(board);
+      setEngineThinking(true);
+      await updateDisplay();
+
+      Move engineMove = _engine.getBestMove(board);
+
+      setEngineThinking(false);
+      await updateDisplay();
       print(engineMove);
       _board.makeMove(engineMove);
       _getGameResult();
@@ -208,6 +225,11 @@ class GameProvider extends ChangeNotifier {
     // If all pass then we are still playing
 
     _gameResult = Result.playing;
+  }
+
+  Future updateDisplay() async {
+    notifyListeners();
+    await Future.delayed(Duration(milliseconds: 20));
   }
 }
 

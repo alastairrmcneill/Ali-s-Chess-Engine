@@ -1,10 +1,9 @@
-// import 'package:ace/chess_engine/game_manager.dart';
+// ignore_for_file: file_names
+
 import 'package:ace/chess_engine/move.dart';
-import 'package:ace/chess_engine/move_generator.dart';
 import 'package:ace/chess_engine/piece.dart';
 import 'package:ace/components/square.dart';
 import 'package:ace/providers/game_provider.dart';
-import 'package:ace/tests/tests.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -23,7 +22,7 @@ class _GUIState extends State<GUI> {
     gameProvider.reset();
   }
 
-  void onSquareTapped(GameProvider gameProvider, int index) {
+  void onSquareTapped(GameProvider gameProvider, int index) async {
     if (gameProvider.gameResult == Result.playing) {
       gameProvider.select(index);
     }
@@ -111,6 +110,9 @@ class _GUIState extends State<GUI> {
                 },
               ),
             ),
+            Text(gameProvider.engineThinking ? "Engine is thinking" : "Engine is idle"),
+            Text(
+                "Evaluated ${gameProvider.numPositionsEvaluated} positions in ${gameProvider.searchDuration.inMilliseconds}ms"),
             Text(gameProvider.gameResult.toString()),
             gameProvider.gameResult == Result.playing
                 ? const SizedBox()

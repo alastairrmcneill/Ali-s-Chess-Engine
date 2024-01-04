@@ -37,7 +37,8 @@ class Evaluation {
         blackRookIndexes.length * rookValue +
         blackQueenIndexes.length * queenValue;
 
-    return whiteEval - blackEval;
+    int perspective = board.whiteToPlay ? 1 : -1;
+    return perspective * (whiteEval - blackEval);
   }
 
   init() {
