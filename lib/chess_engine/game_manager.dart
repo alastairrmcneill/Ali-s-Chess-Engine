@@ -16,7 +16,7 @@ class Game {
     selectedIndex = null;
     gameResult = Result.playing;
     legalMoves = [];
-    legalMoves = moveGenerator.generateLegalMoves2(board);
+    legalMoves = moveGenerator.generateLegalMoves(board);
   }
 
   reset() {
@@ -25,7 +25,7 @@ class Game {
     selectedIndex = null;
     gameResult = Result.playing;
     legalMoves = [];
-    legalMoves = moveGenerator.generateLegalMoves2(board);
+    legalMoves = moveGenerator.generateLegalMoves(board);
   }
 
   bool isWhiteToPlay() {
@@ -54,7 +54,7 @@ class Game {
   }
 
   bool isMoveValid(int targetIndex) {
-    List<Move> legalMoves = moveGenerator.generateLegalMoves2(board);
+    List<Move> legalMoves = moveGenerator.generateLegalMoves(board);
 
     for (var move in legalMoves) {
       if (move.startingSquare == selectedIndex && move.targetSquare == targetIndex) {
@@ -81,7 +81,7 @@ class Game {
   getGameResult() {
     // Check checkmate and stalemate
     // print("Get Game Result");
-    legalMoves = moveGenerator.generateLegalMoves2(board);
+    legalMoves = moveGenerator.generateLegalMoves(board);
     if (legalMoves.isEmpty) {
       if (moveGenerator.opponentAttackMap.contains(moveGenerator.opponentKingIndex)) {
         gameResult = board.whiteToPlay ? Result.whiteIsMated : Result.blackIsMated;

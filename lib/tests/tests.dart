@@ -38,7 +38,7 @@ class Tests {
   }
 
   static int _search(MoveGenerator moveGenerator, Board board, int depth) {
-    List<Move> moves = moveGenerator.generateLegalMoves2(board);
+    List<Move> moves = moveGenerator.generateLegalMoves(board);
 
     if (depth == 1) {
       return moves.length;

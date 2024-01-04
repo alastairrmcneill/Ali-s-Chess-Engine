@@ -1,5 +1,6 @@
+import 'package:ace/chess_engine/ai/evaluation.dart';
 import 'package:ace/chess_engine/board.dart';
-import 'package:ace/chess_engine/engine.dart';
+import 'package:ace/chess_engine/ai/engine.dart';
 import 'package:ace/chess_engine/move.dart';
 import 'package:ace/chess_engine/move_generator.dart';
 import 'package:ace/chess_engine/piece.dart';
@@ -11,6 +12,7 @@ class GameProvider extends ChangeNotifier {
   int? _selectedIndex = null;
   Result _gameResult = Result.playing;
   List<Move> _legalMoves = [];
+  Evaluation _evaluation = Evaluation();
 
   reset() {
     _board = Board();
@@ -18,14 +20,16 @@ class GameProvider extends ChangeNotifier {
     _selectedIndex = null;
     _gameResult = Result.playing;
     _legalMoves = [];
-    _legalMoves = _moveGenerator.generateLegalMoves2(_board);
+    _legalMoves = _moveGenerator.generateLegalMoves(_board);
   }
 
   Board get board => _board;
+  MoveGenerator get moveGenerator => _moveGenerator;
   Result get gameResult => _gameResult;
   bool get whiteToPlay => _board.whiteToPlay;
   int? get selectedIndex => _selectedIndex;
   List<Move> get legalMoves => _legalMoves;
+  int get currentEval => _evaluation.evaluate(_board);
 
   set selectedIndex(int? index) {
     _selectedIndex = index;
@@ -70,18 +74,26 @@ class GameProvider extends ChangeNotifier {
     return false;
   }
 
-  _aiMove() {
-// Start playing some AI moves?
+  Future _aiMove() async {
+    // Start playing some AI moves?
     if (gameResult == Result.playing) {
       Move engineMove = Engine.getBestMove(board);
+      print(engineMove);
       _board.makeMove(engineMove);
       _getGameResult();
       notifyListeners();
     }
   }
 
+  Future startAIGame() async {
+    while (gameResult == Result.playing) {
+      await Future.delayed(Duration(milliseconds: 20));
+      _aiMove();
+    }
+  }
+
   bool isMoveValid(int targetIndex) {
-    List<Move> legalMoves = _moveGenerator.generateLegalMoves2(board);
+    List<Move> legalMoves = _moveGenerator.generateLegalMoves(board);
 
     for (var move in legalMoves) {
       if (move.startingSquare == selectedIndex && move.targetSquare == targetIndex) {
@@ -96,9 +108,9 @@ class GameProvider extends ChangeNotifier {
   _getGameResult() {
     // Check checkmate and stalemate
     // print("Get Game Result");
-    _legalMoves = _moveGenerator.generateLegalMoves2(_board);
+    _legalMoves = _moveGenerator.generateLegalMoves(_board);
     if (legalMoves.isEmpty) {
-      if (_moveGenerator.opponentAttackMap.contains(_moveGenerator.opponentKingIndex)) {
+      if (_moveGenerator.opponentAttackMap.contains(_moveGenerator.friendlyKingIndex)) {
         _gameResult = _board.whiteToPlay ? Result.whiteIsMated : Result.blackIsMated;
         return;
       }
@@ -172,7 +184,7 @@ class GameProvider extends ChangeNotifier {
       _gameResult = Result.insufficientMaterial;
       return;
     } else if (numPawns + numRooks + numQueens == 0) {
-      if (numKnights == 1 || numBishops == 1) {
+      if ((numKnights == 1 && numBishops == 0) || (numBishops == 1 && numKnights == 0)) {
         _gameResult = Result.insufficientMaterial;
         return;
       }

@@ -78,7 +78,7 @@ class MoveGenerator {
     findPieces();
   }
 
-  List<Move> generateLegalMoves2(Board board) {
+  List<Move> generateLegalMoves(Board board) {
     this.board = board;
     init();
     generateOpponentAttackData();
@@ -92,98 +92,6 @@ class MoveGenerator {
     generateQueenMoves();
     generateKnightMoves();
     generatePawnMoves();
-
-    return moves;
-  }
-
-  List<Move> generateLegalMoves(Board board) {
-    generateOpponentAttackMap();
-    List<Move> legalMoves = [];
-    List<Move> psuedoLegalMoves = generateMoves(board);
-
-    for (Move moveToverify in psuedoLegalMoves) {
-      board.makeMove(moveToverify);
-
-      List<Move> responses = generateMoves(board);
-      if (responses.any((move) => move.targetSquare == opponentKingIndex)) {
-        // If any of the response contain the square the king is on then its not a legal move, so skip.
-        board.unMakeMove(moveToverify);
-        continue;
-      }
-
-      if (moveToverify.castling) {
-        if (board.whiteToPlay) {
-          // Then we are checking if white are attacking black king
-          if (responses.any((move) => move.targetSquare == 4) || opponentAttackMap.contains(4)) {
-            // If the king was in check when they started trying to castle it's not legal
-            board.unMakeMove(moveToverify);
-            continue;
-          }
-          if (moveToverify.targetSquare == 2) {
-            // Check the middle squre
-            if (responses.any((move) => move.targetSquare == 3) || opponentAttackMap.contains(3)) {
-              // If the king moves through check then its not legal
-              board.unMakeMove(moveToverify);
-              continue;
-            }
-            // if there is a pawn attacking those squares
-          } else if (moveToverify.targetSquare == 6) {
-            if (responses.any((move) => move.targetSquare == 5) || opponentAttackMap.contains(5)) {
-              // If the king moves through check then its not legal
-              board.unMakeMove(moveToverify);
-              continue;
-            }
-          }
-        } else {
-          // Then we are checking if black are attacking white king
-          if (responses.any((move) => move.targetSquare == 60) || opponentAttackMap.contains(60)) {
-            // If the king was in check when they started trying to castle it's not legal
-            board.unMakeMove(moveToverify);
-            continue;
-          }
-          if (moveToverify.targetSquare == 62) {
-            // Check the middle squre
-            if (responses.any((move) => move.targetSquare == 61) || opponentAttackMap.contains(61)) {
-              // If the king moves through check then its not legal
-              board.unMakeMove(moveToverify);
-              continue;
-            }
-          } else if (moveToverify.targetSquare == 58) {
-            if (responses.any((move) => move.targetSquare == 59) || opponentAttackMap.contains(59)) {
-              // If the king moves through check then its not legal
-              board.unMakeMove(moveToverify);
-              continue;
-            }
-          }
-        }
-      }
-
-      // If all those tests pass then its a legal move
-
-      legalMoves.add(moveToverify);
-      board.unMakeMove(moveToverify);
-    }
-    // for (Move move in legalMoves) print(move);
-    // print("---------------------------------");
-    findPieces();
-    generateOpponentAttackMap();
-
-    return legalMoves;
-  }
-
-  List<Move> generateMoves(Board board) {
-    this.board = board;
-    init();
-
-    generatePawnMoves();
-    generateKingMoves();
-    generateKnightMoves();
-    generateBishopMoves();
-    generateRookMoves();
-    generateQueenMoves();
-    // for (Move move in moves) {
-    //   print(move.toString());
-    // }
 
     return moves;
   }

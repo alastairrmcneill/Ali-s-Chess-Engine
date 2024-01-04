@@ -16,12 +16,9 @@ class GUI extends StatefulWidget {
 }
 
 class _GUIState extends State<GUI> {
-  // late Game game;
-
   @override
   void initState() {
     super.initState();
-    // game = Game();
     GameProvider gameProvider = Provider.of<GameProvider>(context, listen: false);
     gameProvider.reset();
   }
@@ -30,12 +27,6 @@ class _GUIState extends State<GUI> {
     if (gameProvider.gameResult == Result.playing) {
       gameProvider.select(index);
     }
-
-    // setState(() {
-    //   if (gameProvider.gameResult == Result.playing) {
-    //     gameProvider.select(index);
-    //   }
-    // });
   }
 
   @override
@@ -47,6 +38,7 @@ class _GUIState extends State<GUI> {
         child: Column(
           children: [
             Text("Turn: ${gameProvider.whiteToPlay ? "White" : "Black"}"),
+            Text("Current Eval: ${gameProvider.currentEval}"),
             Expanded(
               flex: 1,
               child: GridView.builder(
@@ -91,10 +83,6 @@ class _GUIState extends State<GUI> {
                   return DragTarget<int>(
                     onAccept: (receivedPiece) {
                       gameProvider.move(index);
-
-                      // setState(() {
-                      //   gameProvider.move(index);
-                      // });
                     },
                     onWillAccept: (data) {
                       // Decide if I can land here
@@ -103,7 +91,7 @@ class _GUIState extends State<GUI> {
                     builder: (context, candidateData, rejectedData) {
                       return Square(
                         index: index,
-                        isSquareAttacked: false, //game.moveGenerator.opponentAttackMap.contains(index),
+                        isSquareAttacked: false, // gameProvider.moveGenerator.opponentAttackMap.contains(index),
                         isWhite: isWhite,
                         isSelected: isSelected,
                         isSquareValid: isSquareValid,
@@ -130,9 +118,13 @@ class _GUIState extends State<GUI> {
                     onPressed: () => setState(() => gameProvider.reset()),
                     child: Text("Reset"),
                   ),
+            // ElevatedButton(
+            //   onPressed: () => Tests.testMoveGeneration(gameProvider.board),
+            //   child: Text("Test move gen"),
+            // ),
             ElevatedButton(
-              onPressed: () => Tests.testMoveGeneration(gameProvider.board),
-              child: Text("Test move gen"),
+              onPressed: () => gameProvider.startAIGame(),
+              child: Text("Start AI Game"),
             ),
           ],
         ),
