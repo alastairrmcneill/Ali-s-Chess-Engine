@@ -14,6 +14,7 @@ class Square extends StatelessWidget {
   final int index;
   final bool isSquareValid;
   final bool isSquareAttacked;
+  final bool isLastMove;
 
   const Square({
     super.key,
@@ -28,6 +29,7 @@ class Square extends StatelessWidget {
     required this.isSquareValid,
     required this.onDragableCancelled,
     required this.isSquareAttacked,
+    required this.isLastMove,
   });
 
   @override
@@ -36,7 +38,7 @@ class Square extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: isSelected
+          color: isSelected || isLastMove
               ? isWhite
                   ? const Color.fromARGB(255, 241, 241, 150)
                   : const Color.fromARGB(255, 183, 215, 57)

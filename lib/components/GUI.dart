@@ -82,6 +82,9 @@ class _GUIState extends State<GUI> {
                     }
                   }
 
+                  // Last move highlight
+                  Move lastMove = gameProvider.lastMove;
+
                   return DragTarget<int>(
                     onAccept: (receivedPiece) {
                       gameProvider.move(index);
@@ -98,6 +101,7 @@ class _GUIState extends State<GUI> {
                         isSelected: isSelected,
                         isSquareValid: isSquareValid,
                         isDraggable: isDraggable,
+                        isLastMove: index == lastMove.startingSquare || index == lastMove.targetSquare,
                         piece: gameProvider.board.position[index],
                         onTap: () => onSquareTapped(gameProvider, index),
                         onDragComplete: () => gameProvider.board.position[index] = 0,
@@ -115,7 +119,7 @@ class _GUIState extends State<GUI> {
             ),
             Text(gameProvider.engineThinking ? "Engine is thinking" : "Engine is idle"),
             Text(
-                "Evaluated ${gameProvider.numPositionsEvaluated} positions in ${gameProvider.searchDuration.inMilliseconds}ms"),
+                "Evaluated ${gameProvider.numPositionsEvaluated} positions and ${gameProvider.qPositionsEvaluation} q positions in ${gameProvider.searchDuration.inMilliseconds}ms"),
             Text(gameProvider.gameResult.toString()),
             gameProvider.gameResult == Result.playing
                 ? const SizedBox()

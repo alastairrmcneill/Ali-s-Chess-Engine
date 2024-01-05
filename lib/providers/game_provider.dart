@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 class GameProvider extends ChangeNotifier {
   Board _board = Board();
+  List<Move> _moveHistory = [];
   MoveGenerator _moveGenerator = MoveGenerator();
   int? _selectedIndex = null;
   Result _gameResult = Result.playing;
@@ -24,6 +25,7 @@ class GameProvider extends ChangeNotifier {
     _legalMoves = [];
     _legalMoves = _moveGenerator.generateLegalMoves(_board);
     _engineThinking = false;
+    _moveHistory = [];
   }
 
   Board get board => _board;
@@ -34,8 +36,10 @@ class GameProvider extends ChangeNotifier {
   List<Move> get legalMoves => _legalMoves;
   int get currentEval => _evaluation.evaluate(_board);
   int get numPositionsEvaluated => _engine.positionsEvaluated;
+  int get qPositionsEvaluation => _engine.qPositionsEvaluation;
   Duration get searchDuration => _engine.searchDuration;
   bool get engineThinking => _engineThinking;
+  Move get lastMove => _moveHistory.isNotEmpty ? _moveHistory.last : Move.invalid();
 
   set selectedIndex(int? index) {
     _selectedIndex = index;
@@ -72,6 +76,10 @@ class GameProvider extends ChangeNotifier {
     for (var move in legalMoves) {
       if (move.startingSquare == _selectedIndex && move.targetSquare == targetIndex) {
         _board.makeMove(move);
+        _moveHistory.add(move);
+        print("start History");
+        for (Move move in _moveHistory) print(move);
+        print("End history");
         // board.unMakeMove(move);
         _selectedIndex = null;
         _getGameResult();
@@ -98,6 +106,10 @@ class GameProvider extends ChangeNotifier {
 
       if (engineMove != null) {
         _board.makeMove(engineMove);
+        _moveHistory.add(engineMove);
+        print("start History");
+        for (Move move in _moveHistory) print(move);
+        print("End history");
       }
       _getGameResult();
       notifyListeners();

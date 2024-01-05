@@ -39,11 +39,8 @@ class Board {
   loadFromCustomPosition() {
     LoadedPositionInfo loadedPositionInfo =
         FENUtility.loadPositionFromFEN("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 1 8");
-    // LoadedPositionInfo loadedPositionInfo =
-    // FENUtility.loadPositionFromFEN("r2qk2r/p1pp1Pbn/Bn4p1/4N3/1p2P3/2N2Q1p/PPPB1PPP/R3K2R b KQkq - 1 8");
 
-    // LoadedPositionInfo loadedPositionInfo = FENUtility.loadPositionFromFEN("8/3K4/4P3/8/8/8/6k1/7q w - - 1 8");
-    // LoadedPositionInfo loadedPositionInfo = FENUtility.loadPositionFromFEN("8/8/8/7r/5k2/8/3r4/5K2 b - - 1 8");
+    // LoadedPositionInfo loadedPositionInfo = FENUtility.loadPositionFromFEN("3r4/3k4/8/8/8/3K4/8/8 w - - 1 8");
     position = loadedPositionInfo.position;
     whiteToPlay = loadedPositionInfo.whiteToMove;
     enPassantSquare = loadedPositionInfo.enPassantSquare;

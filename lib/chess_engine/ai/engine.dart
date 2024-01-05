@@ -3,7 +3,6 @@ import 'dart:math';
 import 'package:ace/chess_engine/ai/evaluation.dart';
 import 'package:ace/chess_engine/ai/move_ordering.dart';
 import 'package:ace/chess_engine/board.dart';
-import 'package:ace/chess_engine/fen_utility.dart';
 import 'package:ace/chess_engine/move.dart';
 import 'package:ace/chess_engine/move_generator.dart';
 
@@ -13,11 +12,15 @@ class Engine {
   MoveOrdering moveOrdering = MoveOrdering();
   late Board board;
   int positionsEvaluated = 0;
+  int qPositionsEvaluation = 0;
+  int maxQSearchDepth = 0;
   Duration searchDuration = Duration(milliseconds: 0);
   int checkmateScore = -999999999;
 
   Move? getBestMove(Board board) {
     positionsEvaluated = 0;
+    qPositionsEvaluation = 0;
+    maxQSearchDepth = 0;
     DateTime startTime = DateTime.now();
     this.board = board;
     int bestEval = -1000000000;
@@ -31,7 +34,7 @@ class Engine {
 
     for (Move move in legalMoves) {
       this.board.makeMove(move);
-      int moveEval = -search(3, -beta, -alpha, 0);
+      int moveEval = -search(5, -beta, -alpha, 0);
       this.board.unMakeMove(move);
 
       if (moveEval > bestEval) {
@@ -45,14 +48,15 @@ class Engine {
     // Debugging
     DateTime endTime = DateTime.now();
     searchDuration = endTime.difference(startTime);
-    print("Evaluated $positionsEvaluated in ${searchDuration.inMilliseconds}ms");
+    print(
+        "Evaluated $positionsEvaluated in ${searchDuration.inMilliseconds}ms with a max Q Search depth of $maxQSearchDepth ply");
     return bestMove;
   }
 
   int search(int depth, int alpha, int beta, int plyFromRoot) {
     if (depth == 0) {
       // int eval = evaluation.evaluate(board);
-      int eval = quiescenceSearch(alpha, beta);
+      int eval = quiescenceSearch(alpha, beta, 0);
       positionsEvaluated += 1;
       return eval;
     }
@@ -86,23 +90,22 @@ class Engine {
     return bestEval;
   }
 
-  int quiescenceSearch(int alpha, int beta) {
+  int quiescenceSearch(int alpha, int beta, int depth) {
+    maxQSearchDepth = max(maxQSearchDepth, depth);
     int eval = evaluation.evaluate(board);
     positionsEvaluated += 1;
+    qPositionsEvaluation += 1;
     if (eval >= beta) return beta;
     if (eval > alpha) {
       alpha = eval;
     }
     // Generate only moves which are captures. If there are no captures then just skip over and return
     List<Move> moves = moveGenerator.generateLegalMoves(board, includeQuietMoves: false);
-    if (moves.isEmpty) {
-      print(FENUtility.fenFromBoard(board));
-    }
     moves = moveOrdering.orderMoves(board, moves);
 
     for (Move move in moves) {
       board.makeMove(move);
-      int eval = -quiescenceSearch(-beta, -alpha);
+      int eval = -quiescenceSearch(-beta, -alpha, depth + 1);
       board.unMakeMove(move);
       if (eval >= beta) return beta;
       if (eval > alpha) {
