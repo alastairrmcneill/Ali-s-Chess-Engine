@@ -1,12 +1,18 @@
+import 'dart:math';
+
 import 'package:ace/chess_engine/board.dart';
 import 'package:ace/chess_engine/piece.dart';
+import 'package:ace/chess_engine/precompute_data.dart';
 
 class Evaluation {
+  PrecomputeData precomputeData = PrecomputeData();
+
   final int pawnValue = 100;
   final int knightValue = 300;
   final int bishopValue = 300;
   final int rookValue = 500;
   final int queenValue = 900;
+  final int endgameMaterialStart = 500 * 2 + 300 + 300;
 
   late Board board;
   late List<int> whitePawnIndexes;
@@ -19,6 +25,8 @@ class Evaluation {
   late List<int> blackRookIndexes;
   late List<int> whiteQueenIndexes;
   late List<int> blackQueenIndexes;
+  late int blackKingIndex;
+  late int whiteKingIndex;
 
   int evaluate(Board board) {
     this.board = board;
@@ -26,16 +34,27 @@ class Evaluation {
     int whiteEval = 0;
     int blackEval = 0;
 
-    whiteEval += whitePawnIndexes.length * pawnValue +
+    int whiteMaterial = whitePawnIndexes.length * pawnValue +
         whiteKnightIndexes.length * knightValue +
         whiteBishopIndexes.length * bishopValue +
         whiteRookIndexes.length * rookValue +
         whiteQueenIndexes.length * queenValue;
-    blackEval += blackPawnIndexes.length * pawnValue +
+    int blackMaterial = blackPawnIndexes.length * pawnValue +
         blackKnightIndexes.length * knightValue +
         blackBishopIndexes.length * bishopValue +
         blackRookIndexes.length * rookValue +
         blackQueenIndexes.length * queenValue;
+
+    whiteEval += whiteMaterial;
+    blackEval += blackMaterial;
+
+    // Check what phase of the game we are in
+    double whiteEndGameWeight = endGameWeight(whiteMaterial - whitePawnIndexes.length * pawnValue);
+    double blackEndGameWeight = endGameWeight(blackMaterial - blackPawnIndexes.length * pawnValue);
+
+    // The further from the center the worse it is for your king later in the end game
+    whiteEval += mopUp(whiteMaterial, blackMaterial, whiteKingIndex, blackKingIndex, blackEndGameWeight);
+    blackEval += mopUp(blackMaterial, whiteMaterial, blackKingIndex, whiteKingIndex, whiteEndGameWeight);
 
     int perspective = board.whiteToPlay ? 1 : -1;
     return perspective * (whiteEval - blackEval);
@@ -52,6 +71,9 @@ class Evaluation {
     blackRookIndexes = [];
     whiteQueenIndexes = [];
     blackQueenIndexes = [];
+    whiteKingIndex = -1;
+    blackKingIndex = -1;
+
     findPieces();
   }
 
@@ -76,9 +98,45 @@ class Evaluation {
         case Piece.queen:
           Piece.isColor(piece, Piece.white) ? whiteQueenIndexes.add(index) : blackQueenIndexes.add(index);
           break;
+        case Piece.king:
+          Piece.isColor(piece, Piece.white) ? whiteKingIndex = index : blackKingIndex = index;
+          break;
         default:
           break;
       }
     }
+  }
+
+  double endGameWeight(int materialCountWithoutPawns) {
+    double multiplier = 1 / endgameMaterialStart;
+    return 1 - min(1, materialCountWithoutPawns * multiplier);
+  }
+
+  int kingOrthogonalDistanceApart(int friendlyKingIndex, int opponentKingIndex) {
+    int files = (friendlyKingIndex % 8 - opponentKingIndex % 8).abs();
+    int ranks = (friendlyKingIndex ~/ 8 - opponentKingIndex ~/ 8).abs();
+
+    return files + ranks;
+  }
+
+  int mopUp(
+    int friendlyMaterial,
+    int oppponentMaterial,
+    int friendlyKingIndex,
+    int opponentKingIndex,
+    double endgameWeight,
+  ) {
+    int mopUpScore = 0;
+    // Only apply these scores if I'm winning and in the end game
+    if (friendlyMaterial > oppponentMaterial + 2 * pawnValue && endgameWeight > 0) {
+      // If we are winning then get rewarded for opponent being more to the sides and corner of the board
+      mopUpScore += precomputeData.cmd[opponentKingIndex] * 10;
+
+      // If we are winning then we want the kings to be close together so rewards for that too
+      mopUpScore += (14 - kingOrthogonalDistanceApart(friendlyKingIndex, opponentKingIndex)) * 4;
+
+      return (mopUpScore * endgameWeight).toInt();
+    }
+    return 0;
   }
 }

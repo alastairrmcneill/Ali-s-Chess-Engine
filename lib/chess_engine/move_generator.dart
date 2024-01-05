@@ -27,6 +27,7 @@ class MoveGenerator {
   late int opponentColor;
   late bool inCheck;
   late bool inDoubleCheck;
+  late bool generateQuietMoves;
 
   MoveGenerator() {
     moves = [];
@@ -52,6 +53,7 @@ class MoveGenerator {
     opponentColor = 0;
     inCheck = false;
     inDoubleCheck = false;
+    generateQuietMoves = true;
   }
 
   init() {
@@ -78,8 +80,9 @@ class MoveGenerator {
     findPieces();
   }
 
-  List<Move> generateLegalMoves(Board board) {
+  List<Move> generateLegalMoves(Board board, {bool includeQuietMoves = true}) {
     this.board = board;
+    generateQuietMoves = includeQuietMoves;
     init();
     generateOpponentAttackData();
 
@@ -162,39 +165,40 @@ class MoveGenerator {
       bool oneStepFromPromotion = startingRank == finalRankBeforePromotion;
 
       // Check forward moves
-      if (board.position[targetIndex] == Piece.none) {
-        // Check if not pinned or move along pin ray
-        if (!pinnedRayIndexes.contains(startingIndex) ||
-            isMovingAlongRay(direction, startingIndex, friendlyKingIndex)) {
-          // Make sure we aren't in check or if we are that this intercepts check
-          if (!inCheck || checkedRayIndexes.contains(targetIndex)) {
-            if (oneStepFromPromotion) {
-              makePromotionMoves(startingIndex, targetIndex);
-            } else {
-              moves.add(Move(
-                startingSquare: startingIndex,
-                targetSquare: targetIndex,
-              ));
-            }
-          }
-
-          if (startingRank == beginningRank) {
-            targetIndex = startingIndex + direction * 2;
-
-            if (Piece.color(board.position[targetIndex]) == Piece.none) {
-              // Make sure we aren't in check and if we are that this move intercepts
-              if (!inCheck || checkedRayIndexes.contains(targetIndex)) {
+      if (generateQuietMoves) {
+        if (board.position[targetIndex] == Piece.none) {
+          // Check if not pinned or move along pin ray
+          if (!pinnedRayIndexes.contains(startingIndex) ||
+              isMovingAlongRay(direction, startingIndex, friendlyKingIndex)) {
+            // Make sure we aren't in check or if we are that this intercepts check
+            if (!inCheck || checkedRayIndexes.contains(targetIndex)) {
+              if (oneStepFromPromotion) {
+                makePromotionMoves(startingIndex, targetIndex);
+              } else {
                 moves.add(Move(
                   startingSquare: startingIndex,
                   targetSquare: targetIndex,
-                  pawnTwoForward: true,
                 ));
+              }
+            }
+
+            if (startingRank == beginningRank) {
+              targetIndex = startingIndex + direction * 2;
+
+              if (Piece.color(board.position[targetIndex]) == Piece.none) {
+                // Make sure we aren't in check and if we are that this move intercepts
+                if (!inCheck || checkedRayIndexes.contains(targetIndex)) {
+                  moves.add(Move(
+                    startingSquare: startingIndex,
+                    targetSquare: targetIndex,
+                    pawnTwoForward: true,
+                  ));
+                }
               }
             }
           }
         }
       }
-
       // Check for captures
 
       // if (!pinnedRayIndexes.contains(startingIndex) ||
@@ -321,19 +325,20 @@ class MoveGenerator {
 
       for (int targetIndex in precomputeData.knightMoves[startingIndex]) {
         int targetPiece = board.position[targetIndex];
-        // bool isCapture =  Piece.isColor(targetPiece, opponentColor);
+        bool isCapture = Piece.isColor(targetPiece, opponentColor);
+        if (isCapture || generateQuietMoves) {
+          // Skip if piece is friend OR if we are in check and this piece doesn't get into the check ray
+          if (Piece.isColor(targetPiece, friendlyColor) || (inCheck && !checkedRayIndexes.contains(targetIndex))) {
+            continue;
+          }
 
-        // Skip if piece is friend OR if we are in check and this piece doesn't get into the check ray
-        if (Piece.isColor(targetPiece, friendlyColor) || (inCheck && !checkedRayIndexes.contains(targetIndex))) {
-          continue;
+          moves.add(
+            Move(
+              startingSquare: startingIndex,
+              targetSquare: targetIndex,
+            ),
+          );
         }
-
-        moves.add(
-          Move(
-            startingSquare: startingIndex,
-            targetSquare: targetIndex,
-          ),
-        );
       }
     }
   }
@@ -350,7 +355,7 @@ class MoveGenerator {
       bool isCapture = Piece.isColor(pieceOnTargetIndex, opponentColor);
       if (!isCapture) {
         // If we aren't capturing a piece then we can't go to a square that is in a check ray
-        if (checkedRayIndexes.contains(targetIndex)) continue;
+        if (!generateQuietMoves || checkedRayIndexes.contains(targetIndex)) continue;
       }
 
       // Is square safe to move to because its not under attack
@@ -506,10 +511,12 @@ class MoveGenerator {
 
         bool movePreventsCheck = checkedRayIndexes.contains(targetIndex);
         if (movePreventsCheck || !inCheck) {
-          moves.add(Move(
-            startingSquare: startingIndex,
-            targetSquare: targetIndex,
-          ));
+          if (isCapture || generateQuietMoves) {
+            moves.add(Move(
+              startingSquare: startingIndex,
+              targetSquare: targetIndex,
+            ));
+          }
         }
 
         if (isCapture || movePreventsCheck)

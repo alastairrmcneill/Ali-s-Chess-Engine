@@ -91,12 +91,14 @@ class GameProvider extends ChangeNotifier {
       setEngineThinking(true);
       await updateDisplay();
 
-      Move engineMove = _engine.getBestMove(board);
-
+      Move? engineMove = _engine.getBestMove(board);
       setEngineThinking(false);
       await updateDisplay();
       print(engineMove);
-      _board.makeMove(engineMove);
+
+      if (engineMove != null) {
+        _board.makeMove(engineMove);
+      }
       _getGameResult();
       notifyListeners();
     }

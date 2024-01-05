@@ -1,3 +1,4 @@
+import 'package:ace/chess_engine/board.dart';
 import 'package:ace/chess_engine/loaded_position.dart';
 import 'package:ace/chess_engine/piece.dart';
 import 'package:ace/extensions/string_extension.dart';
@@ -53,5 +54,59 @@ class FENUtility {
     loadedPositionInfo.plyCount = int.parse(sections[4]);
 
     return loadedPositionInfo;
+  }
+
+  static String fenFromBoard(Board board) {
+    String fen = "";
+    for (int rank = 0; rank < 8; rank++) {
+      int numEmptyFiles = 0;
+      for (int file = 0; file < 8; file++) {
+        int i = rank * 8 + file;
+        int piece = board.position[i];
+        if (piece != 0) {
+          if (numEmptyFiles != 0) {
+            fen += numEmptyFiles.toString();
+            numEmptyFiles = 0;
+          }
+          bool isBlack = Piece.isColor(piece, Piece.black);
+          int pieceType = Piece.pieceType(piece);
+          String pieceChar = ' ';
+          switch (pieceType) {
+            case Piece.rook:
+              pieceChar = 'R';
+              break;
+            case Piece.knight:
+              pieceChar = 'N';
+              break;
+            case Piece.bishop:
+              pieceChar = 'B';
+              break;
+            case Piece.queen:
+              pieceChar = 'Q';
+              break;
+            case Piece.king:
+              pieceChar = 'K';
+              break;
+            case Piece.pawn:
+              pieceChar = 'P';
+              break;
+          }
+          fen += (isBlack) ? pieceChar.toLowerCase() : pieceChar.toUpperCase();
+        } else {
+          numEmptyFiles++;
+        }
+      }
+      if (numEmptyFiles != 0) {
+        fen += numEmptyFiles.toString();
+      }
+      if (rank != 7) {
+        fen += '/';
+      }
+    }
+
+    // Check turn
+    fen += board.whiteToPlay ? " w" : " b";
+
+    return fen;
   }
 }

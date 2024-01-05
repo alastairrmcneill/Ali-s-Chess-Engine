@@ -1,9 +1,12 @@
 // ignore_for_file: file_names
 
+import 'package:ace/chess_engine/fen_utility.dart';
 import 'package:ace/chess_engine/move.dart';
+import 'package:ace/chess_engine/move_generator.dart';
 import 'package:ace/chess_engine/piece.dart';
 import 'package:ace/components/square.dart';
 import 'package:ace/providers/game_provider.dart';
+import 'package:ace/tests/tests.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -124,6 +127,12 @@ class _GUIState extends State<GUI> {
             //   onPressed: () => Tests.testMoveGeneration(gameProvider.board),
             //   child: Text("Test move gen"),
             // ),
+            ElevatedButton(
+              onPressed: () {
+                print(FENUtility.fenFromBoard(gameProvider.board));
+              },
+              child: Text("Test FEN"),
+            ),
             ElevatedButton(
               onPressed: () => gameProvider.startAIGame(),
               child: Text("Start AI Game"),

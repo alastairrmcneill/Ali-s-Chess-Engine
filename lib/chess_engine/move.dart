@@ -17,6 +17,10 @@ class Move {
     this.castling = false,
   });
 
+  static Move invalid() {
+    return Move(startingSquare: -1, targetSquare: -1);
+  }
+
   int promotingPiece() {
     if (promotion == 1) {
       return Piece.queen;
@@ -43,6 +47,15 @@ class Move {
     int targetRank = 8 - targetSquare ~/ 8;
 
     return "${files[startingFile]}$startingRank${files[targetFile]}$targetRank";
+  }
+
+  bool isSameAs(Move checkingMove) {
+    return startingSquare == checkingMove.startingSquare &&
+        targetSquare == checkingMove.targetSquare &&
+        enPassantCapture == checkingMove.enPassantCapture &&
+        pawnTwoForward == checkingMove.pawnTwoForward &&
+        promotion == checkingMove.promotion &&
+        castling == checkingMove.castling;
   }
 
   @override
