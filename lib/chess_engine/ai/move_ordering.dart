@@ -5,15 +5,16 @@ import 'package:ace/chess_engine/piece.dart';
 
 class MoveOrdering {
   Evaluation evaluation = Evaluation();
-  List<Move> orderMoves(Board board, List<Move> moves) {
+  List<Move> orderMoves(Board board, List<Move> moves, Move bestMove) {
     moves.sort(
-      (a, b) => calculateMoveScore(board, b).compareTo(calculateMoveScore(board, a)),
+      (a, b) => calculateMoveScore(board, b, bestMove).compareTo(calculateMoveScore(board, a, bestMove)),
     );
 
     return moves;
   }
 
-  int calculateMoveScore(Board board, Move move) {
+  int calculateMoveScore(Board board, Move move, Move bestMove) {
+    if (move.isSameAs(bestMove)) return 1000000000000;
     int score = 0;
     int movedPiece = board.position[move.startingSquare];
     int capturedPiece = board.position[move.targetSquare];

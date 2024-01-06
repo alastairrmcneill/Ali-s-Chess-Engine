@@ -35,8 +35,9 @@ class GameProvider extends ChangeNotifier {
   int? get selectedIndex => _selectedIndex;
   List<Move> get legalMoves => _legalMoves;
   int get currentEval => _evaluation.evaluate(_board);
-  int get numPositionsEvaluated => _engine.positionsEvaluated;
-  int get qPositionsEvaluation => _engine.qPositionsEvaluation;
+  int get totalEvaluations => _engine.totalEvaluations;
+  int get numNodes => _engine.numNodes;
+  int get numQNodes => _engine.numQNodes;
   Duration get searchDuration => _engine.searchDuration;
   bool get engineThinking => _engineThinking;
   Move get lastMove => _moveHistory.isNotEmpty ? _moveHistory.last : Move.invalid();
@@ -77,9 +78,6 @@ class GameProvider extends ChangeNotifier {
       if (move.startingSquare == _selectedIndex && move.targetSquare == targetIndex) {
         _board.makeMove(move);
         _moveHistory.add(move);
-        print("start History");
-        for (Move move in _moveHistory) print(move);
-        print("End history");
         // board.unMakeMove(move);
         _selectedIndex = null;
         _getGameResult();
@@ -99,17 +97,13 @@ class GameProvider extends ChangeNotifier {
       setEngineThinking(true);
       await updateDisplay();
 
-      Move? engineMove = _engine.getBestMove(board);
+      Move? engineMove = await _engine.getBestMove(board);
       setEngineThinking(false);
       await updateDisplay();
-      print(engineMove);
 
       if (engineMove != null) {
         _board.makeMove(engineMove);
         _moveHistory.add(engineMove);
-        print("start History");
-        for (Move move in _moveHistory) print(move);
-        print("End history");
       }
       _getGameResult();
       notifyListeners();
@@ -119,7 +113,7 @@ class GameProvider extends ChangeNotifier {
   Future startAIGame() async {
     while (gameResult == Result.playing) {
       await Future.delayed(Duration(milliseconds: 20));
-      _aiMove();
+      await _aiMove();
     }
   }
 
@@ -243,7 +237,7 @@ class GameProvider extends ChangeNotifier {
 
   Future updateDisplay() async {
     notifyListeners();
-    await Future.delayed(Duration(milliseconds: 20));
+    await Future.delayed(const Duration(milliseconds: 30));
   }
 }
 

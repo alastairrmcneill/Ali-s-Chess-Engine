@@ -1,5 +1,6 @@
 // ignore_for_file: file_names
 
+import 'package:ace/chess_engine/ai/engine.dart';
 import 'package:ace/chess_engine/fen_utility.dart';
 import 'package:ace/chess_engine/move.dart';
 import 'package:ace/chess_engine/move_generator.dart';
@@ -119,26 +120,28 @@ class _GUIState extends State<GUI> {
             ),
             Text(gameProvider.engineThinking ? "Engine is thinking" : "Engine is idle"),
             Text(
-                "Evaluated ${gameProvider.numPositionsEvaluated} positions and ${gameProvider.qPositionsEvaluation} q positions in ${gameProvider.searchDuration.inMilliseconds}ms"),
+                "Evaluated ${gameProvider.totalEvaluations} positions and ${gameProvider.numQNodes} q positions in ${gameProvider.searchDuration.inMilliseconds}ms"),
             Text(gameProvider.gameResult.toString()),
-            gameProvider.gameResult == Result.playing
-                ? const SizedBox()
-                : ElevatedButton(
-                    onPressed: () => setState(() => gameProvider.reset()),
-                    child: Text("Reset"),
-                  ),
+            ElevatedButton(
+              onPressed: () => setState(() => gameProvider.reset()),
+              child: Text("Reset"),
+            ),
             // ElevatedButton(
             //   onPressed: () => Tests.testMoveGeneration(gameProvider.board),
             //   child: Text("Test move gen"),
             // ),
             ElevatedButton(
-              onPressed: () {
-                print(FENUtility.fenFromBoard(gameProvider.board));
+              onPressed: () async {
+                Engine engine = Engine();
+                Move? move = await engine.getBestMove(gameProvider.board);
+                print(move);
               },
-              child: Text("Test FEN"),
+              child: Text("Get best move"),
             ),
             ElevatedButton(
-              onPressed: () => gameProvider.startAIGame(),
+              onPressed: () async {
+                await gameProvider.startAIGame();
+              },
               child: Text("Start AI Game"),
             ),
           ],

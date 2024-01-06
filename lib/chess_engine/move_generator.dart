@@ -201,35 +201,6 @@ class MoveGenerator {
       }
       // Check for captures
 
-      // if (!pinnedRayIndexes.contains(startingIndex) ||
-      //     isMovingAlongRay(direction - 1, startingIndex, friendlyKingIndex)) {
-      //   List<List<int>> pawnCaptureMap =
-      //       board.whiteToPlay ? precomputeData.whitePawnCaptures : precomputeData.blackPawnCaptures;
-      //   for (int targetCaptureIndex in pawnCaptureMap[startingIndex]) {
-      //     if (Piece.isColor(board.position[targetCaptureIndex], opponentColor)) {
-      //       // Make sure we aren't in check and if we are that this move intercepts
-      //       if (!inCheck || checkedRayIndexes.contains(targetCaptureIndex)) {
-      //         if (oneStepFromPromotion) {
-      //           makePromotionMoves(startingIndex, targetCaptureIndex);
-      //         } else {
-      //           moves.add(Move(
-      //             startingSquare: startingIndex,
-      //             targetSquare: targetCaptureIndex,
-      //           ));
-      //         }
-      //       }
-      //     } else if (targetCaptureIndex == board.enPassantSquare) {
-      //       if (!inCheckAfterEnPassant(startingIndex, targetCaptureIndex, board.enPassantSquare - direction)) {
-      //         moves.add(Move(
-      //           startingSquare: startingIndex,
-      //           targetSquare: targetCaptureIndex,
-      //           enPassantCapture: true,
-      //         ));
-      //       }
-      //     }
-      //   }
-      // }
-
       List<List<int>> pawnCaptureMap =
           board.whiteToPlay ? precomputeData.whitePawnCaptures : precomputeData.blackPawnCaptures;
 
