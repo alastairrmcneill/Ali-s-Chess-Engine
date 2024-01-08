@@ -75,7 +75,7 @@ class Square extends StatelessWidget {
                                 color: Colors.red.withOpacity(0.2),
                               )
                             : const SizedBox(),
-                        Text(index.toString()),
+                        // Text(index.toString()),
                         piece == 0 ? const SizedBox() : Piece.getImg(piece),
                       ],
                     ),
@@ -96,7 +96,7 @@ class Square extends StatelessWidget {
                               color: Colors.red.withOpacity(0.2),
                             )
                           : const SizedBox(),
-                      Text(index.toString()),
+                      // Text(index.toString()),
                       piece == 0
                           ? isSquareValid
                               ? Container(

@@ -1,11 +1,13 @@
 import 'dart:math';
 
+import 'package:ace/chess_engine/ai/piece_square_tables.dart';
 import 'package:ace/chess_engine/board.dart';
 import 'package:ace/chess_engine/piece.dart';
 import 'package:ace/chess_engine/precompute_data.dart';
 
 class Evaluation {
   PrecomputeData precomputeData = PrecomputeData();
+  PieceSquareTables pieceSquareTables = PieceSquareTables();
 
   final int pawnValue = 100;
   final int knightValue = 300;
@@ -51,6 +53,49 @@ class Evaluation {
     // Check what phase of the game we are in
     double whiteEndGameWeight = endGameWeight(whiteMaterial - whitePawnIndexes.length * pawnValue);
     double blackEndGameWeight = endGameWeight(blackMaterial - blackPawnIndexes.length * pawnValue);
+
+    // Piece Square Tables
+    for (int index in whitePawnIndexes) {
+      whiteEval += ((1 - whiteEndGameWeight) * pieceSquareTables.whitePawnsEarly[index] +
+              (whiteEndGameWeight) * pieceSquareTables.whitePawnsEnd[index])
+          .toInt();
+    }
+    for (int index in whiteKnightIndexes) {
+      whiteEval += pieceSquareTables.whiteKnights[index];
+    }
+    for (int index in whiteBishopIndexes) {
+      whiteEval += pieceSquareTables.whiteBishops[index];
+    }
+    for (int index in whiteRookIndexes) {
+      whiteEval += pieceSquareTables.whiteRooks[index];
+    }
+    for (int index in whiteQueenIndexes) {
+      whiteEval += pieceSquareTables.whiteQueens[index];
+    }
+    whiteEval += ((1 - whiteEndGameWeight) * pieceSquareTables.whiteKingStart[whiteKingIndex] +
+            (whiteEndGameWeight) * pieceSquareTables.whiteKingEnd[whiteKingIndex])
+        .toInt();
+
+    for (int index in blackPawnIndexes) {
+      blackEval += ((1 - blackEndGameWeight) * pieceSquareTables.blackPawnsEarly[index] +
+              (blackEndGameWeight) * pieceSquareTables.blackPawnsEnd[index])
+          .toInt();
+    }
+    for (int index in blackKnightIndexes) {
+      blackEval += pieceSquareTables.blackKnights[index];
+    }
+    for (int index in blackBishopIndexes) {
+      blackEval += pieceSquareTables.blackBishops[index];
+    }
+    for (int index in blackRookIndexes) {
+      blackEval += pieceSquareTables.blackRooks[index];
+    }
+    for (int index in blackQueenIndexes) {
+      blackEval += pieceSquareTables.blackQueens[index];
+    }
+    blackEval += ((1 - blackEndGameWeight) * pieceSquareTables.blackKingStart[blackKingIndex] +
+            (blackEndGameWeight) * pieceSquareTables.blackKingEnd[blackKingIndex])
+        .toInt();
 
     // The further from the center the worse it is for your king later in the end game
     whiteEval += mopUp(whiteMaterial, blackMaterial, whiteKingIndex, blackKingIndex, blackEndGameWeight);

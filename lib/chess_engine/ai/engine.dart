@@ -17,11 +17,15 @@ class Engine {
   int numQNodes = 0;
   int maxQSearchDepth = 0;
   bool abortSearch = false;
-  Duration maxDuration = const Duration(milliseconds: 2000);
+  Duration maxDuration = const Duration(milliseconds: 1000);
   Duration searchDuration = Duration(milliseconds: 0);
   int checkmateScore = -999999999;
   late Stopwatch stopwatch;
   late Move? bestMove;
+  late int bestEval;
+  late Move? bestMoveThisIteration;
+  late int bestEvalThisIteration;
+  bool hasSearchedAtLeastOneMove = false;
 
   //TODO: Doesn't seem to be finding checkmate anymore for some reason
   //TODO: Doesn't want to protect pawns for some reason either.
@@ -36,7 +40,8 @@ class Engine {
     abortSearch = false;
     DateTime startTime = DateTime.now();
     this.board = board;
-    bestMove = null;
+    bestMove = bestMoveThisIteration = null;
+    bestEval = bestEvalThisIteration = 0;
 
     await runIterativeDeepening();
 
@@ -54,6 +59,42 @@ class Engine {
     return bestMove;
   }
 
+  Future<void> runIterativeDeepening() async {
+    for (int searchDepth = 1; searchDepth <= 200; searchDepth++) {
+      print("Starting with search of depth $searchDepth");
+      int alpha = -1000000001; // Best already explored option along the path to the root for the maximizer
+      int beta = 1000000001; //Best already explored option along the path to the root for the minimizer
+      bestEvalThisIteration = -1000000000;
+      bestMoveThisIteration = null;
+      hasSearchedAtLeastOneMove = false;
+
+      await search(searchDepth, alpha, beta, 0);
+
+      if (abortSearch) {
+        if (hasSearchedAtLeastOneMove) {
+          bestMove = bestMoveThisIteration;
+          bestEval = bestEvalThisIteration;
+          print("Search aborted during search $searchDepth: ");
+          print("Best eval: $bestEval");
+          print("Best move: $bestMove");
+        }
+
+        break;
+      } else {
+        bestMove = bestMoveThisIteration;
+        bestEval = bestEvalThisIteration;
+        print("After searching with depth $searchDepth: ");
+        print("Best eval: $bestEval");
+        print("Best move: $bestMove");
+      }
+
+      if (stopwatch.elapsed >= maxDuration) {
+        abortSearch = true;
+        break;
+      }
+    }
+  }
+
   Future<int> search(int depth, int alpha, int beta, int plyFromRoot) async {
     if (stopwatch.elapsed >= maxDuration) {
       abortSearch = true;
@@ -69,8 +110,7 @@ class Engine {
     //TODO: include draws
 
     List<Move> legalMoves = moveGenerator.generateLegalMoves(board);
-    legalMoves = moveOrdering.orderMoves(board, legalMoves, Move.invalid());
-    // print("Num moves: ${legalMoves.length}");
+    legalMoves = moveOrdering.orderMoves(board, legalMoves, bestMove ?? Move.invalid());
 
     // Check game state.
     if (legalMoves.isEmpty) {
@@ -82,31 +122,41 @@ class Engine {
       return 0;
     }
 
-    int bestEval = -1000000000;
     for (Move move in legalMoves) {
       if (abortSearch) break;
       board.makeMove(move);
       int moveEval = -1 * await search(depth - 1, -beta, -alpha, plyFromRoot + 1);
       board.unMakeMove(move);
       numNodes += 1;
-      bestEval = max(moveEval, bestEval);
-      alpha = max(alpha, moveEval);
-      if (alpha >= beta) {
-        break; // Cut-off
-      }
-
-      // Periodically yield control
-      if (stopwatch.elapsedMilliseconds % 10 == 0) {
-        await Future.delayed(Duration.zero);
-      }
 
       if (stopwatch.elapsed >= maxDuration) {
         abortSearch = true;
         return 0;
         // evaluation.evaluate(board); // Or return a default value not sure if this is a good approach because it means
       }
+
+      // Move is too good. Get rid of the rest.
+      if (alpha >= beta) {
+        break; // Cut-off
+      }
+
+      // Found a new best move in this position
+      if (moveEval > alpha) {
+        alpha = moveEval;
+        // If this is our first layer down then store this as the best move this iteration
+        if (plyFromRoot == 0) {
+          bestEvalThisIteration = moveEval;
+          bestMoveThisIteration = move;
+          hasSearchedAtLeastOneMove = true;
+        }
+      }
+
+      // Periodically yield control
+      if (stopwatch.elapsedMilliseconds % 10 == 0) {
+        await Future.delayed(Duration.zero);
+      }
     }
-    return bestEval;
+    return alpha;
   }
 
   int quiescenceSearch(int alpha, int beta, int depth) {
@@ -135,47 +185,6 @@ class Engine {
     }
 
     return alpha;
-  }
-
-  Future<void> runIterativeDeepening() async {
-    int bestEval = -1000000000;
-    int alpha = -1000000001; // Best already explored option along the path to the root for the maximizer
-    int beta = 1000000001; //Best already explored option along the path to the root for the minimizer
-
-    for (int searchDepth = 1; searchDepth < 100; searchDepth++) {
-      print("Starting with search of depth $searchDepth");
-
-      List<Move> legalMoves = moveGenerator.generateLegalMoves(board);
-      legalMoves = moveOrdering.orderMoves(board, legalMoves, Move.invalid());
-
-      for (Move move in legalMoves) {
-        if (abortSearch) break;
-        board.makeMove(move);
-        int moveEval = -1 * await search(searchDepth, -beta, -alpha, 0);
-        board.unMakeMove(move);
-
-        if (moveEval > bestEval) {
-          bestMove = move;
-          bestEval = moveEval;
-        }
-
-        alpha = max(alpha, moveEval);
-        if (alpha >= beta) break;
-
-        if (stopwatch.elapsed >= maxDuration) {
-          abortSearch = true;
-          break;
-        }
-      }
-
-      print("Best eval: $bestEval");
-      print("Best move: $bestMove");
-
-      if (stopwatch.elapsed >= maxDuration) {
-        abortSearch = true;
-        break;
-      }
-    }
   }
 
   bool checkDraw() {
