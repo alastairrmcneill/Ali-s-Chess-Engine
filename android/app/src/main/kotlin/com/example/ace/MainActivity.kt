@@ -1,4 +1,4 @@
-package com.example.ace
+package com.alastairmcneill.ace
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -24,8 +24,8 @@ class Board {
 
   Board() {
     position = List.generate(64, (index) => index);
-    // loadFromStartingPosition();
-    loadFromCustomPosition();
+    loadFromStartingPosition();
+    // loadFromCustomPosition();
     zobristKey = Zobrist.getZobristForBoard(this);
     gameStateHistory = [];
     fiftyMoveRule = 0;
