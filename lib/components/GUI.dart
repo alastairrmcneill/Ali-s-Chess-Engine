@@ -5,6 +5,7 @@ import 'package:ace/chess_engine/fen_utility.dart';
 import 'package:ace/chess_engine/move.dart';
 import 'package:ace/chess_engine/move_generator.dart';
 import 'package:ace/chess_engine/piece.dart';
+import 'package:ace/chess_engine/zobrist.dart';
 import 'package:ace/components/square.dart';
 import 'package:ace/providers/game_provider.dart';
 import 'package:ace/tests/tests.dart';
@@ -19,11 +20,13 @@ class GUI extends StatefulWidget {
 }
 
 class _GUIState extends State<GUI> {
+  TextEditingController _controller = TextEditingController();
   @override
   void initState() {
     super.initState();
     GameProvider gameProvider = Provider.of<GameProvider>(context, listen: false);
     gameProvider.reset();
+    _controller = TextEditingController(text: gameProvider.thinkingTime.toString());
   }
 
   void onSquareTapped(GameProvider gameProvider, int index) async {
@@ -41,7 +44,7 @@ class _GUIState extends State<GUI> {
         child: Column(
           children: [
             Text("Turn: ${gameProvider.whiteToPlay ? "White" : "Black"}"),
-            Text("Current Eval: ${gameProvider.currentEval}"),
+            // Text("Current Eval: ${gameProvider.currentEval}"),
             Expanded(
               flex: 1,
               child: GridView.builder(
@@ -57,13 +60,13 @@ class _GUIState extends State<GUI> {
 
                   bool isDraggable = false;
                   // If peice is white and whites turn
-                  if ((Piece.color(gameProvider.board.position[index]) == Piece.white && gameProvider.whiteToPlay)) {
+                  if ((Piece.isColor(gameProvider.board.position[index], Piece.white) && gameProvider.whiteToPlay)) {
                     isDraggable = true;
                   }
 
                   // Or Piece is black and blacks turn
 
-                  if ((Piece.color(gameProvider.board.position[index]) == Piece.black && !gameProvider.whiteToPlay)) {
+                  if ((Piece.isColor(gameProvider.board.position[index], Piece.black) && !gameProvider.whiteToPlay)) {
                     isDraggable = true;
                   }
 
@@ -119,24 +122,43 @@ class _GUIState extends State<GUI> {
               ),
             ),
             Text(gameProvider.engineThinking ? "Engine is thinking" : "Engine is idle"),
-            Text(
-                "Evaluated ${gameProvider.totalEvaluations} positions and ${gameProvider.numQNodes} q positions in ${gameProvider.searchDuration.inMilliseconds}ms"),
+            // Text(
+            //     "Evaluated ${gameProvider.totalEvaluations} positions and ${gameProvider.numQNodes} q positions in ${gameProvider.searchDuration.inMilliseconds}ms"),
             Text(gameProvider.gameResult.toString()),
-            ElevatedButton(
-              onPressed: () => setState(() => gameProvider.reset()),
-              child: Text("Reset"),
-            ),
+
             // ElevatedButton(
             //   onPressed: () => Tests.testMoveGeneration(gameProvider.board),
             //   child: Text("Test move gen"),
             // ),
+            // ElevatedButton(
+            //   onPressed: () => Tests.testZobristHashing(gameProvider.board),
+            //   child: Text("Test Zobrist"),
+            // ),
+            // ElevatedButton(
+            //   onPressed: () async {
+            //     Engine engine = Engine();
+            //     Move? move = await engine.getBestMove(gameProvider.board);
+            //     print(move);
+            //   },
+            //   child: Text("Get best move"),
+            // ),
+            Text("Thinking time (ms)"),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: TextField(
+                controller: _controller,
+                keyboardType: TextInputType.number,
+                onChanged: (value) {
+                  int? time = int.tryParse(value);
+
+                  if (time == null) return;
+                  gameProvider.thinkingTime = time;
+                },
+              ),
+            ),
             ElevatedButton(
-              onPressed: () async {
-                Engine engine = Engine();
-                Move? move = await engine.getBestMove(gameProvider.board);
-                print(move);
-              },
-              child: Text("Get best move"),
+              onPressed: () => setState(() => gameProvider.reset()),
+              child: Text("Reset"),
             ),
             ElevatedButton(
               onPressed: () async {

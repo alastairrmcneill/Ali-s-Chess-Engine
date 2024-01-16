@@ -9,14 +9,45 @@ class Piece {
   static const int rook = 5;
   static const int queen = 6;
 
-  static const int white = 8;
-  static const int black = 16;
+  static const int white = 0;
+  static const int black = 8;
+
+  // Pieces
+  static const int whiteKing = king | white;
+  static const int whitePawn = pawn | white;
+  static const int whiteKnight = knight | white;
+  static const int whiteBishop = bishop | white;
+  static const int whiteRook = rook | white;
+  static const int whiteQueen = queen | white;
+  static const int blackKing = king | black;
+  static const int blackPawn = pawn | black;
+  static const int blackKnight = knight | black;
+  static const int blackBishop = bishop | black;
+  static const int blackRook = rook | black;
+  static const int blackQueen = queen | black;
+
+  // Piece list
+  static const int maxPieceIndex = blackQueen;
+  static const List<int> pieceList = [
+    whiteKing,
+    whitePawn,
+    whiteKnight,
+    whiteBishop,
+    whiteRook,
+    whiteQueen,
+    blackKing,
+    blackPawn,
+    blackKnight,
+    blackBishop,
+    blackRook,
+    blackQueen
+  ];
 
   static const int typeMask = 7;
-  static const int colorMask = 1 << 3 | 1 << 4; // 0b00011000
+  static const int colorMask = 1 << 3; // 0b1000
 
   static bool isColor(int piece, int color) {
-    return (piece & colorMask) == color;
+    return (piece & colorMask) == color && piece != 0;
   }
 
   static int color(int piece) {

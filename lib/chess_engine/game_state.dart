@@ -6,6 +6,7 @@ class GameState {
   late bool blackCastleKingSide;
   late bool blackCastleQueenSide;
   late int fiftyMoveRule;
+  late int zobristKey;
 
   GameState({
     this.capturedPiece = 0,
@@ -15,6 +16,7 @@ class GameState {
     this.blackCastleKingSide = false,
     this.blackCastleQueenSide = false,
     this.fiftyMoveRule = 0,
+    this.zobristKey = -1,
   });
 
   @override

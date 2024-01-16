@@ -185,7 +185,7 @@ class MoveGenerator {
             if (startingRank == beginningRank) {
               targetIndex = startingIndex + direction * 2;
 
-              if (Piece.color(board.position[targetIndex]) == Piece.none) {
+              if (board.position[targetIndex] == Piece.none) {
                 // Make sure we aren't in check and if we are that this move intercepts
                 if (!inCheck || checkedRayIndexes.contains(targetIndex)) {
                   moves.add(Move(

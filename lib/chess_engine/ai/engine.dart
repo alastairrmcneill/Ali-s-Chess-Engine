@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:ace/chess_engine/ai/evaluation.dart';
 import 'package:ace/chess_engine/ai/move_ordering.dart';
+import 'package:ace/chess_engine/ai/transposition_table.dart';
 import 'package:ace/chess_engine/board.dart';
 import 'package:ace/chess_engine/move.dart';
 import 'package:ace/chess_engine/move_generator.dart';
@@ -15,9 +16,10 @@ class Engine {
   int totalEvaluations = 0;
   int numNodes = 0;
   int numQNodes = 0;
+  int numTranspositions = 0;
   int maxQSearchDepth = 0;
   bool abortSearch = false;
-  Duration maxDuration = const Duration(milliseconds: 1000);
+  Duration maxDuration = const Duration(milliseconds: 2000);
   Duration searchDuration = Duration(milliseconds: 0);
   int checkmateScore = -999999999;
   late Stopwatch stopwatch;
@@ -26,16 +28,16 @@ class Engine {
   late Move? bestMoveThisIteration;
   late int bestEvalThisIteration;
   bool hasSearchedAtLeastOneMove = false;
+  TranspositionTable transpositionTable = TranspositionTable(100000000);
 
-  //TODO: Doesn't seem to be finding checkmate anymore for some reason
-  //TODO: Doesn't want to protect pawns for some reason either.
-  //TODO: Something to do with the aborting of the search and how you determine the best move
-
-  Future<Move?> getBestMove(Board board) async {
+  Future<Move?> getBestMove(Board board, int thinkingTime) async {
+    maxDuration = Duration(milliseconds: thinkingTime);
     numNodes = 0;
     numQNodes = 0;
+    numTranspositions = 0;
     maxQSearchDepth = 0;
     totalEvaluations = 0;
+    transpositionTable.clear();
     stopwatch = Stopwatch()..start();
     abortSearch = false;
     DateTime startTime = DateTime.now();
@@ -51,6 +53,7 @@ class Engine {
     print("""Total Positions:  $totalEvaluations,
          Q Search Positions: $numQNodes,
          Q Search max depth: $maxQSearchDepth ply,
+         Transpositions: $numTranspositions, 
          Time taken: ${searchDuration.inMilliseconds}ms,
          Best move: $bestMove
         """);
@@ -101,13 +104,28 @@ class Engine {
       return 0;
       evaluation.evaluate(board); // Or return a default value not sure if this is a good approach because it means
     }
+
+    TranspositionTableEntry? entry = transpositionTable.retrieve(board.zobristKey, depth, alpha, beta, plyFromRoot);
+    if (entry != null) {
+      numTranspositions += 1;
+      // If this is the first node then set the best move in this iteration otherwise just return the eval
+      if (plyFromRoot == 0) {
+        bestMoveThisIteration = entry.bestMove;
+        bestEvalThisIteration = entry.eval;
+      }
+      return entry.eval;
+    }
+
     if (depth == 0) {
       // int eval = evaluation.evaluate(board);
       int eval = quiescenceSearch(alpha, beta, 0);
       return eval;
     }
 
-    //TODO: include draws
+    // Check for draws
+    if (board.hashHistory.values.any((element) => element >= 3)) {
+      return 0;
+    }
 
     List<Move> legalMoves = moveGenerator.generateLegalMoves(board);
     legalMoves = moveOrdering.orderMoves(board, legalMoves, bestMove ?? Move.invalid());
@@ -121,6 +139,9 @@ class Engine {
       }
       return 0;
     }
+
+    Move bestMoveInThisPosition = Move.invalid();
+    EntryType type = EntryType.upperBound;
 
     for (Move move in legalMoves) {
       if (abortSearch) break;
@@ -136,13 +157,26 @@ class Engine {
       }
 
       // Move is too good. Get rid of the rest.
-      if (alpha >= beta) {
-        break; // Cut-off
+      if (moveEval >= beta) {
+        transpositionTable.addEntry(
+          TranspositionTableEntry(
+            zobristHash: board.zobristKey,
+            depth: depth,
+            eval: beta,
+            type: EntryType.lowerBound,
+            bestMove: move,
+          ),
+        );
+        // break; // TODO - should i return or break here
+
+        return beta; // Cut-off
       }
 
       // Found a new best move in this position
       if (moveEval > alpha) {
         alpha = moveEval;
+        bestMoveInThisPosition = move;
+        type = EntryType.exact;
         // If this is our first layer down then store this as the best move this iteration
         if (plyFromRoot == 0) {
           bestEvalThisIteration = moveEval;
@@ -156,6 +190,18 @@ class Engine {
         await Future.delayed(Duration.zero);
       }
     }
+
+    // Update Transposition table
+    transpositionTable.addEntry(
+      TranspositionTableEntry(
+        zobristHash: board.zobristKey,
+        depth: depth,
+        eval: alpha,
+        type: type,
+        bestMove: bestMoveInThisPosition,
+      ),
+    );
+
     return alpha;
   }
 

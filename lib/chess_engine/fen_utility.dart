@@ -107,6 +107,32 @@ class FENUtility {
     // Check turn
     fen += board.whiteToPlay ? " w" : " b";
 
+    // Castling
+    fen += ' ';
+    fen += (board.whiteCastleKingSide) ? "K" : "";
+    fen += (board.whiteCastleQueenSide) ? "Q" : "";
+    fen += (board.blackCastleKingSide) ? "k" : "";
+    fen += (board.blackCastleQueenSide) ? "q" : "";
+    fen += (!board.whiteCastleKingSide &&
+            !board.whiteCastleQueenSide &&
+            !board.blackCastleKingSide &&
+            !board.blackCastleQueenSide)
+        ? "-"
+        : "";
+
+    // En-passant
+    fen += ' ';
+    int enPassantFile = board.enPassantSquare % 8;
+    int enPassantRank = board.enPassantSquare ~/ 8;
+
+    String files = "abcdefgh";
+
+    if (board.enPassantSquare == -1) {
+      fen += '-';
+    } else {
+      fen += "${files[enPassantFile]}$enPassantRank";
+    }
+
     return fen;
   }
 }

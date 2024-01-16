@@ -4,9 +4,11 @@ import 'package:ace/chess_engine/ai/engine.dart';
 import 'package:ace/chess_engine/move.dart';
 import 'package:ace/chess_engine/move_generator.dart';
 import 'package:ace/chess_engine/piece.dart';
+import 'package:ace/chess_engine/zobrist.dart';
 import 'package:flutter/material.dart';
 
 class GameProvider extends ChangeNotifier {
+  Zobrist _zobrist = Zobrist();
   Board _board = Board();
   List<Move> _moveHistory = [];
   MoveGenerator _moveGenerator = MoveGenerator();
@@ -16,6 +18,7 @@ class GameProvider extends ChangeNotifier {
   Evaluation _evaluation = Evaluation();
   Engine _engine = Engine();
   bool _engineThinking = false;
+  int _thinkingTime = 2000;
 
   reset() {
     _board = Board();
@@ -41,9 +44,16 @@ class GameProvider extends ChangeNotifier {
   Duration get searchDuration => _engine.searchDuration;
   bool get engineThinking => _engineThinking;
   Move get lastMove => _moveHistory.isNotEmpty ? _moveHistory.last : Move.invalid();
+  int get zobristKey => _board.zobristKey;
+  int get thinkingTime => _thinkingTime;
 
   set selectedIndex(int? index) {
     _selectedIndex = index;
+    notifyListeners();
+  }
+
+  set thinkingTime(int thinkingTime) {
+    _thinkingTime = thinkingTime;
     notifyListeners();
   }
 
@@ -97,7 +107,7 @@ class GameProvider extends ChangeNotifier {
       setEngineThinking(true);
       await updateDisplay();
 
-      Move? engineMove = await _engine.getBestMove(board);
+      Move? engineMove = await _engine.getBestMove(board, _thinkingTime);
       setEngineThinking(false);
       await updateDisplay();
 
@@ -131,6 +141,7 @@ class GameProvider extends ChangeNotifier {
   }
 
   _getGameResult() {
+    print("Board hash history length: ${board.hashHistory.values.any((element) => element == 3)}");
     // Check checkmate and stalemate
     // print("Get Game Result");
     _legalMoves = _moveGenerator.generateLegalMoves(_board);
