@@ -24,3 +24,6 @@ The **Evaluation** for any given positions is handled by comparing the remaining
 
 
 Using the search and evaluation algorithms above the engine is able to play at a rating of ~1500 ELO. 
+
+
+This project was inspired by an excellent video by Sebastian Lague [here](https://youtu.be/U4ogK0MIzqk?si=Cy8-raNohwVjh4E-).
