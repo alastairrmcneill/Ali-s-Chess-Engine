@@ -1,14 +1,14 @@
 import 'package:ace/chess_engine/ai/evaluation.dart';
-import 'package:ace/chess_engine/board.dart';
+import 'package:ace/chess_engine/core/board.dart';
 import 'package:ace/chess_engine/ai/engine.dart';
-import 'package:ace/chess_engine/move.dart';
-import 'package:ace/chess_engine/move_generator.dart';
-import 'package:ace/chess_engine/piece.dart';
-import 'package:ace/chess_engine/zobrist.dart';
+import 'package:ace/chess_engine/core/move.dart';
+import 'package:ace/chess_engine/core/move_generator.dart';
+import 'package:ace/chess_engine/core/piece.dart';
+import 'package:ace/chess_engine/core/zobrist.dart';
 import 'package:flutter/material.dart';
 
 class GameProvider extends ChangeNotifier {
-  Zobrist _zobrist = Zobrist();
+  Zobrist zobrist = Zobrist(); // Needed to initialise the zobrist values before hashing can begin
   Board _board = Board();
   List<Move> _moveHistory = [];
   MoveGenerator _moveGenerator = MoveGenerator();
@@ -38,12 +38,8 @@ class GameProvider extends ChangeNotifier {
   int? get selectedIndex => _selectedIndex;
   List<Move> get legalMoves => _legalMoves;
   int get currentEval => _evaluation.evaluate(_board);
-  int get totalEvaluations => _engine.totalEvaluations;
-  int get numNodes => _engine.numNodes;
-  int get numQNodes => _engine.numQNodes;
-  Duration get searchDuration => _engine.searchDuration;
   bool get engineThinking => _engineThinking;
-  Move get lastMove => _moveHistory.isNotEmpty ? _moveHistory.last : Move.invalid();
+  Move get lastMove => _moveHistory.isNotEmpty ? _moveHistory.last : Move.invalid;
   int get zobristKey => _board.zobristKey;
   int get thinkingTime => _thinkingTime;
 
@@ -62,6 +58,8 @@ class GameProvider extends ChangeNotifier {
   }
 
   Future select(int index) async {
+    // Called when a square on the UI gets tapped or successfully dragged
+
     if (_selectedIndex != null) {
       // If something has been selected already then try to see if we can move there
       bool result = await move(index);
@@ -71,7 +69,7 @@ class GameProvider extends ChangeNotifier {
       }
     } else {
       // If not then set this peiece to be selected, unless its an empty square and set selected to be null
-      if (_board.position[index] == 0) {
+      if (_board.position[index] == Piece.none) {
         _selectedIndex = null;
       } else {
         if ((_board.whiteToPlay && Piece.isColor(_board.position[index], Piece.white)) ||
@@ -84,15 +82,17 @@ class GameProvider extends ChangeNotifier {
   }
 
   Future move(int targetIndex) async {
+    // Loop through the moves to find if we can move to this square from where we are
+
     for (var move in legalMoves) {
       if (move.startingSquare == _selectedIndex && move.targetSquare == targetIndex) {
         _board.makeMove(move);
         _moveHistory.add(move);
-        // board.unMakeMove(move);
         _selectedIndex = null;
         _getGameResult();
         await updateDisplay();
 
+        // This is where we call the engine. Remove to do player v player
         await _aiMove();
         return true;
       }
@@ -102,35 +102,44 @@ class GameProvider extends ChangeNotifier {
   }
 
   Future _aiMove() async {
-    // Start playing some AI moves?
+    // Only play a move if the game is still being played
     if (gameResult == Result.playing) {
+      // Update display to give user feedback
       setEngineThinking(true);
       await updateDisplay();
 
+      // Find best move in this position
       Move? engineMove = await _engine.getBestMove(board, _thinkingTime);
+
+      // Update display to give user feedback
       setEngineThinking(false);
       await updateDisplay();
 
+      // Make the move
       if (engineMove != null) {
         _board.makeMove(engineMove);
         _moveHistory.add(engineMove);
       }
+
+      // Check the state of the game after the move is made before it is the user's turn again
       _getGameResult();
       notifyListeners();
     }
   }
 
   Future startAIGame() async {
+    // If you want to watch an AI vs AI game
     while (gameResult == Result.playing) {
-      await Future.delayed(Duration(milliseconds: 20));
+      await Future.delayed(const Duration(milliseconds: 20));
       await _aiMove();
     }
   }
 
   bool isMoveValid(int targetIndex) {
+    // Used to check if it is valid to drag a piece to the target square
     List<Move> legalMoves = _moveGenerator.generateLegalMoves(board);
 
-    for (var move in legalMoves) {
+    for (Move move in legalMoves) {
       if (move.startingSquare == selectedIndex && move.targetSquare == targetIndex) {
         notifyListeners();
         return true;
@@ -141,10 +150,10 @@ class GameProvider extends ChangeNotifier {
   }
 
   _getGameResult() {
-    print("Board hash history length: ${board.hashHistory.values.any((element) => element == 3)}");
-    // Check checkmate and stalemate
-    // print("Get Game Result");
+    // Check all possible end game conditions
     _legalMoves = _moveGenerator.generateLegalMoves(_board);
+
+    // Check if stalemate or checkmate
     if (legalMoves.isEmpty) {
       if (_moveGenerator.opponentAttackMap.contains(_moveGenerator.friendlyKingIndex)) {
         _gameResult = _board.whiteToPlay ? Result.whiteIsMated : Result.blackIsMated;
@@ -161,24 +170,10 @@ class GameProvider extends ChangeNotifier {
     }
 
     // Check 3 repetition
-    Map<String, int> occurrenceMap = {};
+    if (_board.hashHistory.values.any((element) => element >= 3)) {
+      _gameResult = Result.repeition;
 
-    for (var list in _board.positionRepetitionHistory) {
-      // Convert the list to a string to use as a key in the map
-      String key = list.toString();
-
-      // Update the occurrence count for this list
-      if (!occurrenceMap.containsKey(key)) {
-        occurrenceMap[key] = 1;
-      } else {
-        occurrenceMap[key] = (occurrenceMap[key] as int) + 1;
-      }
-
-      // Check if this list has occurred 3 times
-      if (occurrenceMap[key] == 3) {
-        _gameResult = Result.repeition;
-        return;
-      }
+      return;
     }
 
     // Check insufficient material
@@ -193,7 +188,7 @@ class GameProvider extends ChangeNotifier {
     for (int i = 0; i < _board.position.length; i++) {
       int piece = _board.position[i];
 
-      int pieceType = Piece.pieceType(piece);
+      int pieceType = Piece.type(piece);
       switch (pieceType) {
         case Piece.queen:
           numQueens++;
@@ -242,7 +237,6 @@ class GameProvider extends ChangeNotifier {
     }
 
     // If all pass then we are still playing
-
     _gameResult = Result.playing;
   }
 

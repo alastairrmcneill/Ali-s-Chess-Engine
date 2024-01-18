@@ -1,4 +1,4 @@
-import 'package:ace/chess_engine/piece.dart';
+import 'package:ace/chess_engine/core/piece.dart';
 
 class LoadedPositionInfo {
   late List<int> position;

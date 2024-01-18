@@ -1,37 +1,38 @@
-import 'package:ace/chess_engine/piece.dart';
+import 'package:ace/chess_engine/core/piece.dart';
 import 'package:flutter/material.dart';
 
 class Square extends StatelessWidget {
+  final int index;
   final bool isWhite;
   final int piece;
+  final bool isSelected;
+  final bool isDraggable;
+  final bool isSquareValid;
+  final bool isLastMove;
   final Function() onTap;
-
   final Function() onDragStarted;
   final Function() onDragComplete;
   final Function(Velocity, Offset) onDragableCancelled;
-  final bool isSelected;
-  final bool isDraggable;
-  final int index;
-  final bool isSquareValid;
-  final bool isSquareAttacked;
-  final bool isLastMove;
 
   const Square({
     super.key,
+    required this.index,
     required this.isWhite,
     required this.piece,
+    required this.isSelected,
+    required this.isDraggable,
+    required this.isSquareValid,
+    required this.isLastMove,
     required this.onTap,
     required this.onDragStarted,
     required this.onDragComplete,
-    required this.isSelected,
-    required this.isDraggable,
-    required this.index,
-    required this.isSquareValid,
     required this.onDragableCancelled,
-    required this.isSquareAttacked,
-    required this.isLastMove,
   });
 
+  final Color lightSquareColor = const Color.fromRGBO(238, 238, 213, 1);
+  final Color darkSquareColor = const Color.fromRGBO(124, 149, 93, 1);
+  final Color lightSquareSelectedColor = const Color.fromARGB(255, 241, 241, 150);
+  final Color darkSquareSelectedColor = const Color.fromARGB(255, 183, 215, 57);
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -40,11 +41,11 @@ class Square extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected || isLastMove
               ? isWhite
-                  ? const Color.fromARGB(255, 241, 241, 150)
-                  : const Color.fromARGB(255, 183, 215, 57)
+                  ? lightSquareSelectedColor
+                  : darkSquareSelectedColor
               : isWhite
-                  ? const Color.fromRGBO(238, 238, 213, 1)
-                  : const Color.fromRGBO(124, 149, 93, 1),
+                  ? lightSquareColor
+                  : darkSquareColor,
         ),
         child: isDraggable
             ? Draggable<int>(
@@ -58,7 +59,7 @@ class Square extends StatelessWidget {
                 onDragStarted: onDragStarted,
                 childWhenDragging: Container(
                   decoration: BoxDecoration(
-                    color: isWhite ? const Color.fromARGB(255, 241, 241, 150) : const Color.fromARGB(255, 183, 215, 57),
+                    color: isWhite ? lightSquareSelectedColor : darkSquareSelectedColor,
                   ),
                 ),
                 onDragCompleted: onDragComplete,
@@ -66,19 +67,7 @@ class Square extends StatelessWidget {
                   child: SizedBox(
                     width: MediaQuery.of(context).size.width / 8,
                     height: MediaQuery.of(context).size.width / 8,
-                    child: Stack(
-                      children: [
-                        isSquareAttacked
-                            ? Container(
-                                width: MediaQuery.of(context).size.width / 8,
-                                height: MediaQuery.of(context).size.width / 8,
-                                color: Colors.red.withOpacity(0.2),
-                              )
-                            : const SizedBox(),
-                        // Text(index.toString()),
-                        piece == 0 ? const SizedBox() : Piece.getImg(piece),
-                      ],
-                    ),
+                    child: piece == 0 ? const SizedBox() : Piece.getImg(piece),
                   ),
                 ),
               )
@@ -86,29 +75,27 @@ class Square extends StatelessWidget {
                 child: SizedBox(
                   width: MediaQuery.of(context).size.width / 8,
                   height: MediaQuery.of(context).size.width / 8,
-                  // child: Text(index.toString()),
                   child: Stack(
                     children: [
-                      isSquareAttacked
-                          ? Container(
-                              width: MediaQuery.of(context).size.width / 8,
-                              height: MediaQuery.of(context).size.width / 8,
-                              color: Colors.red.withOpacity(0.2),
-                            )
-                          : const SizedBox(),
-                      // Text(index.toString()),
+                      Text(index.toString()),
                       piece == 0
                           ? isSquareValid
-                              ? Container(
-                                  margin: const EdgeInsets.all(15),
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.grey,
-                                  ),
+                              ? Stack(
+                                  children: [
+                                    Text(index.toString()),
+                                    Container(
+                                      margin: const EdgeInsets.all(15),
+                                      decoration: const BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
                                 )
                               : const SizedBox()
                           : Stack(
                               children: [
+                                Text(index.toString()),
                                 Piece.getImg(piece),
                                 isSquareValid
                                     ? Container(

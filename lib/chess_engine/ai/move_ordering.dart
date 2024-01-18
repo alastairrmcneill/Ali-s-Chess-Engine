@@ -1,11 +1,12 @@
 import 'package:ace/chess_engine/ai/evaluation.dart';
-import 'package:ace/chess_engine/board.dart';
-import 'package:ace/chess_engine/move.dart';
-import 'package:ace/chess_engine/piece.dart';
+import 'package:ace/chess_engine/core/board.dart';
+import 'package:ace/chess_engine/core/move.dart';
+import 'package:ace/chess_engine/core/piece.dart';
 
 class MoveOrdering {
   Evaluation evaluation = Evaluation();
   List<Move> orderMoves(Board board, List<Move> moves, Move bestMove) {
+    // Sort the moves in descending order based on given score
     moves.sort(
       (a, b) => calculateMoveScore(board, b, bestMove).compareTo(calculateMoveScore(board, a, bestMove)),
     );
@@ -14,7 +15,9 @@ class MoveOrdering {
   }
 
   int calculateMoveScore(Board board, Move move, Move bestMove) {
+    // This promotse best move to the front of the list
     if (move.isSameAs(bestMove)) return 1000000000000;
+
     int score = 0;
     int movedPiece = board.position[move.startingSquare];
     int capturedPiece = board.position[move.targetSquare];
@@ -46,7 +49,7 @@ class MoveOrdering {
   }
 
   int getPieceValue(int piece) {
-    switch (Piece.pieceType(piece)) {
+    switch (Piece.type(piece)) {
       case Piece.pawn:
         return evaluation.pawnValue;
       case Piece.knight:

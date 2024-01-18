@@ -1,6 +1,6 @@
-import 'package:ace/chess_engine/board.dart';
-import 'package:ace/chess_engine/loaded_position.dart';
-import 'package:ace/chess_engine/piece.dart';
+import 'package:ace/chess_engine/core/board.dart';
+import 'package:ace/chess_engine/helpers/loaded_position.dart';
+import 'package:ace/chess_engine/core/piece.dart';
 import 'package:ace/extensions/string_extension.dart';
 
 class FENUtility {
@@ -13,7 +13,6 @@ class FENUtility {
     "q": Piece.queen,
     "k": Piece.king,
   };
-  FENUtility() {}
 
   static LoadedPositionInfo loadPositionFromFEN(String fen) {
     LoadedPositionInfo loadedPositionInfo = LoadedPositionInfo();
@@ -69,7 +68,7 @@ class FENUtility {
             numEmptyFiles = 0;
           }
           bool isBlack = Piece.isColor(piece, Piece.black);
-          int pieceType = Piece.pieceType(piece);
+          int pieceType = Piece.type(piece);
           String pieceChar = ' ';
           switch (pieceType) {
             case Piece.rook:

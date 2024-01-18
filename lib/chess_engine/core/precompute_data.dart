@@ -1,8 +1,12 @@
 import 'dart:math';
 
+import 'package:ace/chess_engine/helpers/board_helper.dart';
+
+// Run once at the start of the program to get common information in the move generation sequence
+
 class PrecomputeData {
-  // First 4 are orthogonal, last 4 are diagonals (N, S, W, E, NW, SE, NE, SW)
-  late List<int> directionOffsets = [8, -8, -1, 1, 7, -7, 9, -9];
+  // First 4 are orthogonal, last 4 are diagonals (N, E, S, W, NE, SE, SW, NW)
+  final List<int> directionOffsets = [-8, 1, 8, -1, -7, 9, 7, -9];
   late List<List<int>> numSquaresToEdge;
   late List<List<int>> knightMoves;
   late List<List<int>> kingMoves;
@@ -28,8 +32,8 @@ class PrecomputeData {
     blackPawnCaptures = List.generate(64, (index) => []);
 
     for (int index = 0; index < 64; index++) {
-      int rank = index ~/ 8;
-      int file = index % 8;
+      int rank = BoardHelper.getRankFromIndex(index);
+      int file = BoardHelper.getFileFromIndex(index);
 
       // Num squares to edge
       int north = rank;
@@ -47,9 +51,8 @@ class PrecomputeData {
       numSquaresToEdge[index][7] = min(north, west);
 
       // King moves
-      List<int> kingOffsets = [-8, 8, -1, 1, -7, 7, -9, 9];
       kingMoves[index] = [];
-      for (int offset in kingOffsets) {
+      for (int offset in directionOffsets) {
         int targetIndex = index + offset;
         if (targetIndex >= 0 && targetIndex < 64) {
           int targetIndexCol = targetIndex % 8;
@@ -77,37 +80,45 @@ class PrecomputeData {
       // White pawn captures
       whitePawnCaptures[index] = [];
 
+      // Decide what the attack squares should be
       int targetIndexCaptureLeft = index - 8 - 1;
       int targetIndexCaptureRight = index - 8 + 1;
 
+      // Determine if left capture is in bounds of board and doesn't wrap to other side
       if (targetIndexCaptureLeft >= 0 && targetIndexCaptureLeft < 64) {
-        int targetIndexCaptureLeftCol = targetIndexCaptureLeft % 8;
-        if ((targetIndexCaptureLeftCol - file).abs() == 1) {
+        int targetIndexCaptureLeftFile = BoardHelper.getFileFromIndex(targetIndexCaptureLeft);
+        if ((targetIndexCaptureLeftFile - file).abs() == 1) {
           whitePawnCaptures[index].add(targetIndexCaptureLeft);
         }
       }
+
+      // Determine if right capture is in bounds of board and doesn't wrap to the other side
       if (targetIndexCaptureRight >= 0 && targetIndexCaptureRight < 64) {
-        int targetIndexCaptureLeftCol = targetIndexCaptureRight % 8;
-        if ((targetIndexCaptureLeftCol - file).abs() == 1) {
+        int targetIndexCaptureRightCol = BoardHelper.getFileFromIndex(targetIndexCaptureRight);
+        if ((targetIndexCaptureRightCol - file).abs() == 1) {
           whitePawnCaptures[index].add(targetIndexCaptureRight);
         }
       }
 
-      // White pawn captures
+      // Black pawn captures
       blackPawnCaptures[index] = [];
 
+      // Define possible attack squares
       targetIndexCaptureLeft = index + 8 - 1;
       targetIndexCaptureRight = index + 8 + 1;
 
+      // Determine if left capture is in bounds of board and doesn't wrap to the other side
       if (targetIndexCaptureLeft >= 0 && targetIndexCaptureLeft < 64) {
-        int targetIndexCaptureLeftCol = targetIndexCaptureLeft % 8;
-        if ((targetIndexCaptureLeftCol - file).abs() == 1) {
+        int targetIndexCaptureLeftFile = BoardHelper.getFileFromIndex(targetIndexCaptureLeft);
+        if ((targetIndexCaptureLeftFile - file).abs() == 1) {
           blackPawnCaptures[index].add(targetIndexCaptureLeft);
         }
       }
+
+      // Determine if right capture is in bounds of board and doesn't wrap to the other side
       if (targetIndexCaptureRight >= 0 && targetIndexCaptureRight < 64) {
-        int targetIndexCaptureLeftCol = targetIndexCaptureRight % 8;
-        if ((targetIndexCaptureLeftCol - file).abs() == 1) {
+        int targetIndexCaptureRightFile = BoardHelper.getFileFromIndex(targetIndexCaptureRight);
+        if ((targetIndexCaptureRightFile - file).abs() == 1) {
           blackPawnCaptures[index].add(targetIndexCaptureRight);
         }
       }

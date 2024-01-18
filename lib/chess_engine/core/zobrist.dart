@@ -1,10 +1,11 @@
 import 'dart:math';
 
-import 'package:ace/chess_engine/board.dart';
-import 'package:ace/chess_engine/piece.dart';
+import 'package:ace/chess_engine/core/board.dart';
+import 'package:ace/chess_engine/core/piece.dart';
 
 class Zobrist {
   static final Random _random = Random();
+
   // List for each type of peice and within that, each square on the board
   static List<List<int>> piecesArray = List.generate(
     Piece.maxPieceIndex + 1,
@@ -22,7 +23,25 @@ class Zobrist {
   static int sideToMove = 0;
 
   Zobrist() {
-    _init();
+    // Setup piecesArray
+    for (int piece in Piece.pieceList) {
+      for (int index = 0; index < 64; index++) {
+        piecesArray[piece][index] = generateRandom64BitNumber();
+      }
+    }
+
+    // Setup castling rights
+    for (int i = 0; i < castlingRights.length; i++) {
+      castlingRights[i] = generateRandom64BitNumber();
+    }
+
+    // Setup enpassant squares
+    for (int i = 0; i < enPassantSquares.length; i++) {
+      enPassantSquares[i] = i == 0 ? 0 : generateRandom64BitNumber();
+    }
+
+    // Setup
+    sideToMove = generateRandom64BitNumber();
   }
 
   static int getZobristForBoard(Board board) {
@@ -50,28 +69,6 @@ class Zobrist {
     if (!board.whiteToPlay) zobristkey ^= sideToMove;
 
     return zobristkey;
-  }
-
-  static _init() {
-    // Setup piecesArray
-    for (int piece in Piece.pieceList) {
-      for (int index = 0; index < 64; index++) {
-        piecesArray[piece][index] = generateRandom64BitNumber();
-      }
-    }
-
-    // Setup castling rights
-    for (int i = 0; i < castlingRights.length; i++) {
-      castlingRights[i] = generateRandom64BitNumber();
-    }
-
-    // Setup enpassant squares
-    for (int i = 0; i < enPassantSquares.length; i++) {
-      enPassantSquares[i] = i == 0 ? 0 : generateRandom64BitNumber();
-    }
-
-    // Setup
-    sideToMove = generateRandom64BitNumber();
   }
 
   static int generateRandom64BitNumber() {

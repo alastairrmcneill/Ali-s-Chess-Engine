@@ -1,9 +1,10 @@
 import 'dart:math';
 
 import 'package:ace/chess_engine/ai/piece_square_tables.dart';
-import 'package:ace/chess_engine/board.dart';
-import 'package:ace/chess_engine/piece.dart';
-import 'package:ace/chess_engine/precompute_data.dart';
+import 'package:ace/chess_engine/core/board.dart';
+import 'package:ace/chess_engine/helpers/board_helper.dart';
+import 'package:ace/chess_engine/core/piece.dart';
+import 'package:ace/chess_engine/core/precompute_data.dart';
 
 class Evaluation {
   PrecomputeData precomputeData = PrecomputeData();
@@ -36,6 +37,7 @@ class Evaluation {
     int whiteEval = 0;
     int blackEval = 0;
 
+    // Add up total material
     int whiteMaterial = whitePawnIndexes.length * pawnValue +
         whiteKnightIndexes.length * knightValue +
         whiteBishopIndexes.length * bishopValue +
@@ -54,24 +56,29 @@ class Evaluation {
     double whiteEndGameWeight = endGameWeight(whiteMaterial - whitePawnIndexes.length * pawnValue);
     double blackEndGameWeight = endGameWeight(blackMaterial - blackPawnIndexes.length * pawnValue);
 
-    // Piece Square Tables
+    // Use Piece Square Tables to better score each piece
     for (int index in whitePawnIndexes) {
       whiteEval += ((1 - whiteEndGameWeight) * pieceSquareTables.whitePawnsEarly[index] +
               (whiteEndGameWeight) * pieceSquareTables.whitePawnsEnd[index])
           .toInt();
     }
+
     for (int index in whiteKnightIndexes) {
       whiteEval += pieceSquareTables.whiteKnights[index];
     }
+
     for (int index in whiteBishopIndexes) {
       whiteEval += pieceSquareTables.whiteBishops[index];
     }
+
     for (int index in whiteRookIndexes) {
       whiteEval += pieceSquareTables.whiteRooks[index];
     }
+
     for (int index in whiteQueenIndexes) {
       whiteEval += pieceSquareTables.whiteQueens[index];
     }
+
     whiteEval += ((1 - whiteEndGameWeight) * pieceSquareTables.whiteKingStart[whiteKingIndex] +
             (whiteEndGameWeight) * pieceSquareTables.whiteKingEnd[whiteKingIndex])
         .toInt();
@@ -81,18 +88,23 @@ class Evaluation {
               (blackEndGameWeight) * pieceSquareTables.blackPawnsEnd[index])
           .toInt();
     }
+
     for (int index in blackKnightIndexes) {
       blackEval += pieceSquareTables.blackKnights[index];
     }
+
     for (int index in blackBishopIndexes) {
       blackEval += pieceSquareTables.blackBishops[index];
     }
+
     for (int index in blackRookIndexes) {
       blackEval += pieceSquareTables.blackRooks[index];
     }
+
     for (int index in blackQueenIndexes) {
       blackEval += pieceSquareTables.blackQueens[index];
     }
+
     blackEval += ((1 - blackEndGameWeight) * pieceSquareTables.blackKingStart[blackKingIndex] +
             (blackEndGameWeight) * pieceSquareTables.blackKingEnd[blackKingIndex])
         .toInt();
@@ -125,7 +137,7 @@ class Evaluation {
   void findPieces() {
     for (var index = 0; index < board.position.length; index++) {
       int piece = board.position[index];
-      int pieceType = Piece.pieceType(piece);
+      int pieceType = Piece.type(piece);
 
       switch (pieceType) {
         case Piece.pawn:
@@ -158,8 +170,14 @@ class Evaluation {
   }
 
   int kingOrthogonalDistanceApart(int friendlyKingIndex, int opponentKingIndex) {
-    int files = (friendlyKingIndex % 8 - opponentKingIndex % 8).abs();
-    int ranks = (friendlyKingIndex ~/ 8 - opponentKingIndex ~/ 8).abs();
+    int friendlyKingFile = BoardHelper.getFileFromIndex(friendlyKingIndex);
+    int friendlyKingRank = BoardHelper.getRankFromIndex(friendlyKingIndex);
+
+    int opponentKingFile = BoardHelper.getFileFromIndex(opponentKingIndex);
+    int opponentKingRank = BoardHelper.getRankFromIndex(opponentKingIndex);
+
+    int files = (friendlyKingFile - opponentKingFile).abs();
+    int ranks = (friendlyKingRank - opponentKingRank).abs();
 
     return files + ranks;
   }

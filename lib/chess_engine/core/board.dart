@@ -1,11 +1,11 @@
 import 'dart:collection';
 
-import 'package:ace/chess_engine/fen_utility.dart';
-import 'package:ace/chess_engine/game_state.dart';
-import 'package:ace/chess_engine/loaded_position.dart';
-import 'package:ace/chess_engine/move.dart';
-import 'package:ace/chess_engine/piece.dart';
-import 'package:ace/chess_engine/zobrist.dart';
+import 'package:ace/chess_engine/helpers/fen_utility.dart';
+import 'package:ace/chess_engine/core/game_state.dart';
+import 'package:ace/chess_engine/helpers/loaded_position.dart';
+import 'package:ace/chess_engine/core/move.dart';
+import 'package:ace/chess_engine/core/piece.dart';
+import 'package:ace/chess_engine/core/zobrist.dart';
 
 class Board {
   late List<int> position;
@@ -17,67 +17,58 @@ class Board {
   late bool blackCastleQueenSide;
   late List<GameState> gameStateHistory;
   late int fiftyMoveRule;
-  late List<int> positionRepetitionHistory;
   late HashMap<int, int> hashHistory = HashMap();
   late int gamePosition;
   late int zobristKey;
 
   Board() {
     position = List.generate(64, (index) => index);
-    loadFromStartingPosition();
-    // loadFromCustomPosition();
+    LoadedPositionInfo loadedPositionInfo = loadFromStartingPosition();
+    // LoadedPositionInfo loadedPositionInfo=  loadFromCustomPosition();
+
+    position = loadedPositionInfo.position;
+    whiteToPlay = loadedPositionInfo.whiteToMove;
+    enPassantSquare = loadedPositionInfo.enPassantSquare;
+    whiteCastleKingSide = loadedPositionInfo.whiteCastleKingSide;
+    whiteCastleQueenSide = loadedPositionInfo.whiteCastleQueenSide;
+    blackCastleKingSide = loadedPositionInfo.blackCastleKingSide;
+    blackCastleQueenSide = loadedPositionInfo.blackCastleQueenSide;
+
     zobristKey = Zobrist.getZobristForBoard(this);
     gameStateHistory = [];
     fiftyMoveRule = 0;
-    positionRepetitionHistory = [];
     gamePosition = 0;
   }
 
-  loadFromStartingPosition() {
-    LoadedPositionInfo loadedPositionInfo = FENUtility.loadPositionFromFEN(FENUtility.startingPosition);
-    position = loadedPositionInfo.position;
-    whiteToPlay = loadedPositionInfo.whiteToMove;
-    enPassantSquare = loadedPositionInfo.enPassantSquare;
-    whiteCastleKingSide = loadedPositionInfo.whiteCastleKingSide;
-    whiteCastleQueenSide = loadedPositionInfo.whiteCastleQueenSide;
-    blackCastleKingSide = loadedPositionInfo.blackCastleKingSide;
-    blackCastleQueenSide = loadedPositionInfo.blackCastleQueenSide;
+  LoadedPositionInfo loadFromStartingPosition() {
+    return FENUtility.loadPositionFromFEN(FENUtility.startingPosition);
   }
 
-  loadFromCustomPosition() {
-    // LoadedPositionInfo loadedPositionInfo = FENUtility.loadPositionFromFEN("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1");
+  LoadedPositionInfo loadFromCustomPosition() {
+    // return FENUtility.loadPositionFromFEN("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1");
 
-    // LoadedPositionInfo loadedPositionInfo = FENUtility.loadPositionFromFEN("8/1k6/3p4/p2P1p2/P2P1P2/8/8/K7 b - - 1 8");
-    // LoadedPositionInfo loadedPositionInfo = FENUtility.loadPositionFromFEN("3r4/8/3k4/8/8/3K4/8/8 w - - 1 8");
-    LoadedPositionInfo loadedPositionInfo = FENUtility.loadPositionFromFEN("8/8/3k4/1K6/5r2/8/8/8 b - - 1 8");
-
-    position = loadedPositionInfo.position;
-    whiteToPlay = loadedPositionInfo.whiteToMove;
-    enPassantSquare = loadedPositionInfo.enPassantSquare;
-    whiteCastleKingSide = loadedPositionInfo.whiteCastleKingSide;
-    whiteCastleQueenSide = loadedPositionInfo.whiteCastleQueenSide;
-    blackCastleKingSide = loadedPositionInfo.blackCastleKingSide;
-    blackCastleQueenSide = loadedPositionInfo.blackCastleQueenSide;
+    // return FENUtility.loadPositionFromFEN("8/1k6/3p4/p2P1p2/P2P1P2/8/8/K7 b - - 1 8");
+    // return FENUtility.loadPositionFromFEN("3r4/8/3k4/8/8/3K4/8/8 w - - 1 8");
+    return FENUtility.loadPositionFromFEN("rnbq1bnr/pppkpppp/8/1P1p4/8/P7/2PPPPPP/RNBQKBNR b KQkq - 0 1");
   }
 
   makeMove(Move move) {
+    // Set up current game state
     GameState gameState = GameState();
     gameState.whiteCastleKingSide = whiteCastleKingSide;
     gameState.whiteCastleQueenSide = whiteCastleQueenSide;
     gameState.blackCastleKingSide = blackCastleKingSide;
     gameState.blackCastleQueenSide = blackCastleQueenSide;
     gameState.zobristKey = zobristKey;
+
+    // Who is moving to where
     int selectedPiece = position[move.startingSquare];
     int capturedPiece = position[move.targetSquare];
     int color = whiteToPlay ? Piece.white : Piece.black;
 
     gameState.enPassantSquare = enPassantSquare;
     gameState.capturedPiece = capturedPiece;
-    int startingCastlingIndex = 0;
-    if (whiteCastleKingSide) startingCastlingIndex |= 8;
-    if (whiteCastleQueenSide) startingCastlingIndex |= 4;
-    if (blackCastleKingSide) startingCastlingIndex |= 2;
-    if (blackCastleQueenSide) startingCastlingIndex |= 1;
+    int startingCastlingIndex = castlingRightsAsInt();
 
     // Remove selected piece from start square zobrist
     zobristKey ^= Zobrist.piecesArray[selectedPiece][move.startingSquare]; // Remove starting peice from starting square
@@ -132,7 +123,7 @@ class Board {
         default:
           break;
       }
-    } else if (Piece.pieceType(selectedPiece) == Piece.king) {
+    } else if (Piece.type(selectedPiece) == Piece.king) {
       if (whiteToPlay) {
         whiteCastleKingSide = false;
         whiteCastleQueenSide = false;
@@ -140,7 +131,7 @@ class Board {
         blackCastleKingSide = false;
         blackCastleQueenSide = false;
       }
-    } else if (Piece.pieceType(selectedPiece) == Piece.rook) {
+    } else if (Piece.type(selectedPiece) == Piece.rook) {
       if (whiteToPlay) {
         if (move.startingSquare == 56) {
           whiteCastleQueenSide = false;
@@ -155,7 +146,7 @@ class Board {
         }
       }
     }
-    if (Piece.pieceType(capturedPiece) == Piece.rook) {
+    if (Piece.type(capturedPiece) == Piece.rook) {
       if (Piece.isColor(capturedPiece, Piece.white)) {
         if (move.targetSquare == 56) {
           whiteCastleQueenSide = false;
@@ -171,16 +162,11 @@ class Board {
       }
     }
 
-    int endingCastlingIndex = 0;
-    if (whiteCastleKingSide) endingCastlingIndex |= 8;
-    if (whiteCastleQueenSide) endingCastlingIndex |= 4;
-    if (blackCastleKingSide) endingCastlingIndex |= 2;
-    if (blackCastleQueenSide) endingCastlingIndex |= 1;
+    int endingCastlingIndex = castlingRightsAsInt();
     if (startingCastlingIndex != endingCastlingIndex) {
       zobristKey ^= Zobrist.castlingRights[startingCastlingIndex];
       zobristKey ^= Zobrist.castlingRights[endingCastlingIndex];
     }
-
     // End of castling
 
     // Update positions
@@ -196,14 +182,12 @@ class Board {
 
     gameState.fiftyMoveRule = fiftyMoveRule;
     fiftyMoveRule++;
-    if (Piece.pieceType(selectedPiece) == Piece.pawn || Piece.pieceType(capturedPiece) != Piece.none) {
+    if (Piece.type(selectedPiece) == Piece.pawn || Piece.type(capturedPiece) != Piece.none) {
       fiftyMoveRule = 0;
     }
 
     gameStateHistory.add(gameState);
-
-    positionRepetitionHistory.add(zobristKey);
-    addMoveToHistory(zobristKey);
+    addMoveToHashHistory(zobristKey);
   }
 
   unMakeMove(Move move) {
@@ -237,7 +221,7 @@ class Board {
         default:
           break;
       }
-    } else if (Piece.pieceType(selectedPiece) == Piece.king) {
+    } else if (Piece.type(selectedPiece) == Piece.king) {
       if (whiteToPlay) {
         // Opposite for undoing
         blackCastleQueenSide = gameStateHistory.last.blackCastleQueenSide;
@@ -246,7 +230,7 @@ class Board {
         whiteCastleKingSide = gameStateHistory.last.whiteCastleKingSide;
         whiteCastleQueenSide = gameStateHistory.last.whiteCastleQueenSide;
       }
-    } else if (Piece.pieceType(selectedPiece) == Piece.rook) {
+    } else if (Piece.type(selectedPiece) == Piece.rook) {
       if (!whiteToPlay) {
         // Opposite because of previous go
         if (move.startingSquare == 56) {
@@ -262,7 +246,7 @@ class Board {
         }
       }
     }
-    if (Piece.pieceType(capturedPiece) == Piece.rook) {
+    if (Piece.type(capturedPiece) == Piece.rook) {
       if (Piece.isColor(capturedPiece, Piece.white)) {
         if (move.targetSquare == 56) {
           whiteCastleQueenSide = gameStateHistory.last.whiteCastleQueenSide;
@@ -292,21 +276,29 @@ class Board {
 
     fiftyMoveRule = gameStateHistory.last.fiftyMoveRule;
 
-    removeMoveFromHistory();
+    removeMoveFromHashHistory();
     zobristKey = gameStateHistory.last.zobristKey;
     gameStateHistory.removeLast();
 
-    positionRepetitionHistory.removeLast();
     position[move.startingSquare] = selectedPiece;
     position[move.targetSquare] = capturedPiece;
     whiteToPlay = !whiteToPlay;
   }
 
-  void addMoveToHistory(int zobristHash) {
+  int castlingRightsAsInt() {
+    int castlingIndex = 0;
+    if (whiteCastleKingSide) castlingIndex |= 8;
+    if (whiteCastleQueenSide) castlingIndex |= 4;
+    if (blackCastleKingSide) castlingIndex |= 2;
+    if (blackCastleQueenSide) castlingIndex |= 1;
+    return castlingIndex;
+  }
+
+  void addMoveToHashHistory(int zobristHash) {
     hashHistory.update(zobristHash, (count) => count + 1, ifAbsent: () => 1);
   }
 
-  void removeMoveFromHistory() {
+  void removeMoveFromHashHistory() {
     // Since the move is undone, decrement the count in the hash history.
     hashHistory.update(zobristKey, (count) => count - 1);
   }

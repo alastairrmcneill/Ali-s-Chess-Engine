@@ -12,7 +12,7 @@ class Piece {
   static const int white = 0;
   static const int black = 8;
 
-  // Pieces
+  // Pieces using bitwise OR
   static const int whiteKing = king | white;
   static const int whitePawn = pawn | white;
   static const int whiteKnight = knight | white;
@@ -43,6 +43,7 @@ class Piece {
     blackQueen
   ];
 
+  // Masks
   static const int typeMask = 7;
   static const int colorMask = 1 << 3; // 0b1000
 
@@ -54,19 +55,17 @@ class Piece {
     return piece & colorMask;
   }
 
-  static int pieceType(int piece) {
+  static int type(int piece) {
     return piece & typeMask;
   }
 
   static bool isQueenOrBishop(int piece) {
-    int pieceType = Piece.pieceType(piece);
-
+    int pieceType = Piece.type(piece);
     return (pieceType == queen || pieceType == bishop);
   }
 
   static bool isQueenOrRook(int piece) {
-    int pieceType = Piece.pieceType(piece);
-
+    int pieceType = Piece.type(piece);
     return (pieceType == queen || pieceType == rook);
   }
 
@@ -78,7 +77,7 @@ class Piece {
       imgString += "b";
     }
 
-    switch (pieceType(piece)) {
+    switch (type(piece)) {
       case 1:
         imgString += "k";
         break;
@@ -102,12 +101,12 @@ class Piece {
         break;
     }
 
-    return Image.asset("assets/${imgString}.png");
+    return Image.asset("assets/$imgString.png");
   }
 
   static String print(int piece) {
     String string = "";
-    switch (pieceType(piece)) {
+    switch (type(piece)) {
       case 1:
         string = "k";
         break;

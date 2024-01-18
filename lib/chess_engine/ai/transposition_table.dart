@@ -1,29 +1,24 @@
-import 'package:ace/chess_engine/move.dart';
+import 'package:ace/chess_engine/core/move.dart';
 
 class TranspositionTable {
-  final int size;
   final Map<int, TranspositionTableEntry> _table = {};
 
-  TranspositionTable(this.size);
+  TranspositionTable();
 
   void clear() {
     _table.clear();
   }
 
   void addEntry(TranspositionTableEntry entry) {
-    if (_table.length >= size) {
-      print("out of space");
-    }
     _table[entry.zobristHash] = entry;
   }
 
   TranspositionTableEntry? retrieve(int zobristHash, int depth, int alpha, int beta, int plyFromRoot) {
+    // Directly look up entry as this is O(1) timing instead of using a list contains
     TranspositionTableEntry? entry = _table[zobristHash];
 
     // Return null if it doesn't exist
-    if (entry == null) {
-      return null;
-    }
+    if (entry == null) return null;
 
     // If it does exist only return it if entry has been done to a deeper depth.
     if (entry.depth >= depth) {

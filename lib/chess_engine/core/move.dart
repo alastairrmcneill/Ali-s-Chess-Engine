@@ -1,4 +1,5 @@
-import 'package:ace/chess_engine/piece.dart';
+import 'package:ace/chess_engine/helpers/board_helper.dart';
+import 'package:ace/chess_engine/core/piece.dart';
 
 class Move {
   final int startingSquare;
@@ -17,34 +18,32 @@ class Move {
     this.castling = false,
   });
 
-  static Move invalid() {
+  static Move get invalid {
     return Move(startingSquare: -1, targetSquare: -1);
   }
 
   int promotingPiece() {
-    if (promotion == 1) {
-      return Piece.queen;
-    }
-    if (promotion == 2) {
-      return Piece.knight;
-    }
-    if (promotion == 3) {
-      return Piece.rook;
-    }
-    if (promotion == 4) {
-      return Piece.bishop;
-    } else {
-      return Piece.none;
+    switch (promotion) {
+      case 1:
+        return Piece.queen;
+      case 2:
+        return Piece.knight;
+      case 3:
+        return Piece.rook;
+      case 4:
+        return Piece.bishop;
+      default:
+        return Piece.none;
     }
   }
 
   String toChessNotation() {
     String files = "abcdefgh";
 
-    int startingFile = startingSquare % 8;
-    int startingRank = 8 - startingSquare ~/ 8;
-    int targetFile = targetSquare % 8;
-    int targetRank = 8 - targetSquare ~/ 8;
+    int startingFile = BoardHelper.getFileFromIndex(startingSquare);
+    int startingRank = 8 - BoardHelper.getRankFromIndex(startingSquare);
+    int targetFile = BoardHelper.getFileFromIndex(targetSquare);
+    int targetRank = 8 - BoardHelper.getRankFromIndex(targetSquare);
 
     return "${files[startingFile]}$startingRank${files[targetFile]}$targetRank";
   }

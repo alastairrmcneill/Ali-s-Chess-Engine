@@ -400,6 +400,7 @@ class PieceSquareTables {
     0,
     0,
   ];
+
   List<int> whiteKnights = [
     -50,
     -40,
@@ -466,6 +467,7 @@ class PieceSquareTables {
     -40,
     -50,
   ];
+
   List<int> blackKnights = [
     -50,
     -40,
@@ -532,6 +534,7 @@ class PieceSquareTables {
     -40,
     -50,
   ];
+
   List<int> whiteBishops = [
     -20,
     -10,
@@ -665,6 +668,7 @@ class PieceSquareTables {
     -10,
     -20,
   ];
+
   List<int> whiteQueens = [
     -20,
     -10,
@@ -865,6 +869,7 @@ class PieceSquareTables {
     30,
     20,
   ];
+
   List<int> blackKingStart = [
     20,
     30,
