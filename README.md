@@ -23,7 +23,7 @@ The **Evaluation** for any given positions is handled by comparing the remaining
 * **Mop Up** - When the game progresses towards the endgame the tactics change slightly, incentivising the king who is in the lead that time to try and get closer to the opponent to help deliver checkmate. 
 
 
-Using the search and evaluation algorithms above the engine is able to play at a rating of ~1500 ELO. 
+Using the search and evaluation algorithms above the engine is able to play at a rating of ~1800 ELO. 
 
 
 This project was inspired by an excellent video by Sebastian Lague [here](https://youtu.be/U4ogK0MIzqk?si=Cy8-raNohwVjh4E-).
