@@ -51,6 +51,11 @@ and v1 plays Re7-e5, jumping over the knight on e6.
   Those half-searched scores are then trusted by later probes at the same or lower depth in the same search.
 - **Fix:** when `abortSearch` is set, return immediately (e.g. `return 0`) and never write TT entries for aborted
   nodes. The root already discards unfinished iterations except for `bestMoveThisIteration`.
+- **Likely symptom seen in a match:** in `6k1/5rp1/3NQ3/4p1bp/P7/5qP1/1P5P/4R1K1 w - - 5 49`, v1 played Rxe5,
+  reporting `+5.15/3` with the line `Rxe5 Bc1 Qc8+ Rf8`, and was mated by Qf1# straight after. A completed depth 3
+  search must see a mate-in-one reply, so a bad score reached the root. A partial iteration or a polluted TT entry
+  (this issue, or #3) is the likely cause. `bin/inspect.dart` on that position ranks Rxe5 last, at #-1. It's a good
+  regression position for v2.
 
 ### 3. Mate scores in the transposition table aren't adjusted for distance
 `ai/transposition_table.dart:25–29`. `retrieve` computes an adjusted `eval` with `adjustMateScore`, but then returns
