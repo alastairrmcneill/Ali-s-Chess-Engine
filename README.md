@@ -27,3 +27,18 @@ Using the search and evaluation algorithms above the engine is able to play at a
 
 
 This project was inspired by an excellent video by Sebastian Lague [here](https://youtu.be/U4ogK0MIzqk?si=Cy8-raNohwVjh4E-).
+
+#### Testing new versions
+
+Every version of the engine is kept in `lib/engines/` so new versions can be played against old ones. The match
+manager plays 1,000 games from balanced openings between two versions and reports the Elo difference, logs each
+engine's thinking in the PGNs, and flags suspicious moves to inspect. It runs from the command line or on a phone:
+
+```sh
+dart run bin/match.dart --engine1 v2 --engine2 v1
+flutter run -t lib/main_match.dart --release
+```
+
+See [docs/match_manager.md](docs/match_manager.md) for details, and
+[docs/engine_v1_known_issues.md](docs/engine_v1_known_issues.md) for known issues in v1 to fix in v2.
+
