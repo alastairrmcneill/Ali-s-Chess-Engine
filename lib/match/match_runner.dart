@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:isolate';
 
+import 'package:ace/engines/chess_engine.dart';
 import 'package:ace/engines/engine_registry.dart';
 import 'package:ace/match/game_record.dart';
 import 'package:ace/match/game_runner.dart';
@@ -197,6 +198,7 @@ void _workerMain(List<Object> args) {
   SendPort toMain = args[0] as SendPort;
   bool featured = args[1] as bool;
   ReceivePort inbox = ReceivePort();
+  Set<String> warmedUp = {};
   toMain.send({"type": "ready", "port": inbox.sendPort});
 
   inbox.listen((message) async {
@@ -207,6 +209,14 @@ void _workerMain(List<Object> args) {
     Map job = message as Map;
     MatchPlayer white = MatchPlayer.fromJson((job["white"] as Map).cast<String, dynamic>());
     MatchPlayer black = MatchPlayer.fromJson((job["black"] as Map).cast<String, dynamic>());
+
+    // A fresh isolate runs slowly until the code has been compiled, which would handicap whichever engine moves
+    // first. Warm each engine up once so that cost never lands on a real move.
+    for (String engineId in {white.engineId, black.engineId}) {
+      if (warmedUp.add(engineId)) {
+        await createEngine(engineId).search(const EnginePosition(), const SearchLimits(moveTimeMs: 200));
+      }
+    }
     GameRecord game = await playGame(
       gameNumber: job["gameNumber"],
       openingIndex: job["openingIndex"],

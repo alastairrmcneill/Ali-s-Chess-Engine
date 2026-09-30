@@ -145,4 +145,7 @@ adapter reads depth from v1's debug prints because v1's engine code is frozen.
 - **Self-play:** `dart run bin/match.dart --engine1 v1 --engine2 v1 --games 200 --movetime 40` should give an
   interval that includes 0. Over 200 games it gave `+38 ± 48`.
 - **Handicap:** the same engine with 10× the thinking time should clearly win:
-  `dart run bin/match.dart --engine1 v1 --engine2 v1 --movetime 20 --movetime2 200 --games 40`.
+  `dart run bin/match.dart --engine1 v1 --engine2 v1 --movetime 20 --movetime2 200 --games 150`.
+  Over 150 games this gave `-70 ± 56` for the 20ms side, which is significant. 40 games wasn't enough
+  (`-108 ± 133`). The gap is modest because 10× the time only buys v1 about one extra ply (issue #6 in the known
+  issues).
