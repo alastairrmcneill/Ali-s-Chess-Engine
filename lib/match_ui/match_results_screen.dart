@@ -36,7 +36,9 @@ class _MatchResultsScreenState extends State<MatchResultsScreen> {
             IconButton(
               tooltip: "Share PGN and report",
               icon: const Icon(Icons.share),
-              onPressed: () => Share.shareFiles([match.pgnFile.path, match.reportFile.path]),
+              onPressed: () => SharePlus.instance.share(
+                ShareParams(files: [XFile(match.pgnFile.path), XFile(match.reportFile.path)]),
+              ),
             ),
           ],
           bottom: const TabBar(tabs: [Tab(text: "Report"), Tab(text: "Suspicious"), Tab(text: "Games")]),

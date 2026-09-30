@@ -56,7 +56,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
 
   Widget _engineDropdown(String label, String value, ValueChanged<String> onChanged) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(labelText: label),
       items: [for (String id in engineRegistry.keys) DropdownMenuItem(value: id, child: Text(id))],
       onChanged: (id) => setState(() => onChanged(id!)),
