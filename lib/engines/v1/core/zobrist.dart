@@ -1,7 +1,7 @@
 import 'dart:math';
 
-import 'package:ace/chess_engine/core/board.dart';
-import 'package:ace/chess_engine/core/piece.dart';
+import 'package:ace/engines/v1/core/board.dart';
+import 'package:ace/engines/v1/core/piece.dart';
 
 class Zobrist {
   static final Random _random = Random();

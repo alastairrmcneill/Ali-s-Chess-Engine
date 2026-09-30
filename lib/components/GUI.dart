@@ -1,11 +1,10 @@
 // ignore_for_file: file_names
 
-import 'package:ace/chess_engine/core/move.dart';
-import 'package:ace/chess_engine/core/piece.dart';
+import 'package:ace/chess_core/move.dart';
+import 'package:ace/chess_core/piece.dart';
 import 'package:ace/components/square.dart';
-import 'package:ace/chess_engine/helpers/board_helper.dart';
+import 'package:ace/chess_core/board_helper.dart';
 import 'package:ace/providers/game_provider.dart';
-import 'package:ace/tests/tests.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

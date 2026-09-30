@@ -1,11 +1,10 @@
 import 'dart:collection';
 
-import 'package:ace/chess_engine/helpers/fen_utility.dart';
-import 'package:ace/chess_engine/core/game_state.dart';
-import 'package:ace/chess_engine/helpers/loaded_position.dart';
-import 'package:ace/chess_engine/core/move.dart';
-import 'package:ace/chess_engine/core/piece.dart';
-import 'package:ace/chess_engine/core/zobrist.dart';
+import 'package:ace/chess_core/fen.dart';
+import 'package:ace/chess_core/game_state.dart';
+import 'package:ace/chess_core/move.dart';
+import 'package:ace/chess_core/piece.dart';
+import 'package:ace/chess_core/zobrist.dart';
 
 class Board {
   late List<int> position;
@@ -18,39 +17,46 @@ class Board {
   late List<GameState> gameStateHistory;
   late int fiftyMoveRule;
   late HashMap<int, int> hashHistory = HashMap();
-  late int gamePosition;
+  late int plyCount; // Half moves since the start of the game, used for the FEN full move number
   late int zobristKey;
 
-  Board() {
-    position = List.generate(64, (index) => index);
-    LoadedPositionInfo loadedPositionInfo = loadFromStartingPosition();
-    // LoadedPositionInfo loadedPositionInfo=  loadFromCustomPosition();
+  Board() : this.fromFen(FenPosition.startingFen);
 
-    position = loadedPositionInfo.position;
-    whiteToPlay = loadedPositionInfo.whiteToMove;
-    enPassantSquare = loadedPositionInfo.enPassantSquare;
-    whiteCastleKingSide = loadedPositionInfo.whiteCastleKingSide;
-    whiteCastleQueenSide = loadedPositionInfo.whiteCastleQueenSide;
-    blackCastleKingSide = loadedPositionInfo.blackCastleKingSide;
-    blackCastleQueenSide = loadedPositionInfo.blackCastleQueenSide;
+  Board.fromFen(String fen) {
+    FenPosition fenPosition = FenPosition.parse(fen);
+    position = fenPosition.squares.map((piece) => piece == null ? Piece.none : Piece.fromFenChar(piece)).toList();
+    whiteToPlay = fenPosition.whiteToMove;
+    enPassantSquare = fenPosition.enPassantSquare;
+    whiteCastleKingSide = fenPosition.whiteCastleKingSide;
+    whiteCastleQueenSide = fenPosition.whiteCastleQueenSide;
+    blackCastleKingSide = fenPosition.blackCastleKingSide;
+    blackCastleQueenSide = fenPosition.blackCastleQueenSide;
 
     zobristKey = Zobrist.getZobristForBoard(this);
     gameStateHistory = [];
-    fiftyMoveRule = 0;
-    gamePosition = 0;
+    fiftyMoveRule = fenPosition.halfmoveClock;
+    plyCount = (fenPosition.fullmoveNumber - 1) * 2 + (whiteToPlay ? 0 : 1);
+
+    // The starting position counts towards three fold repetition
+    addMoveToHashHistory(zobristKey);
   }
 
-  LoadedPositionInfo loadFromStartingPosition() {
-    return FENUtility.loadPositionFromFEN(FENUtility.startingPosition);
+  String toFen() {
+    return FenPosition(
+      squares: position.map((piece) => piece == Piece.none ? null : Piece.toFenChar(piece)).toList(),
+      whiteToMove: whiteToPlay,
+      whiteCastleKingSide: whiteCastleKingSide,
+      whiteCastleQueenSide: whiteCastleQueenSide,
+      blackCastleKingSide: blackCastleKingSide,
+      blackCastleQueenSide: blackCastleQueenSide,
+      enPassantSquare: enPassantSquare,
+      halfmoveClock: fiftyMoveRule,
+      fullmoveNumber: plyCount ~/ 2 + 1,
+    ).toFen();
   }
 
-  LoadedPositionInfo loadFromCustomPosition() {
-    // return FENUtility.loadPositionFromFEN("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1");
-
-    // return FENUtility.loadPositionFromFEN("8/1k6/3p4/p2P1p2/P2P1P2/8/8/K7 b - - 1 8");
-    // return FENUtility.loadPositionFromFEN("3r4/8/3k4/8/8/3K4/8/8 w - - 1 8");
-    return FENUtility.loadPositionFromFEN("rnbq1bnr/pppkpppp/8/1P1p4/8/P7/2PPPPPP/RNBQKBNR b KQkq - 0 1");
-  }
+  /// How many times the current position has occurred in this game
+  int get repetitionCount => hashHistory[zobristKey] ?? 0;
 
   makeMove(Move move) {
     // Set up current game state
@@ -188,6 +194,7 @@ class Board {
 
     gameStateHistory.add(gameState);
     addMoveToHashHistory(zobristKey);
+    plyCount++;
   }
 
   unMakeMove(Move move) {
@@ -283,6 +290,7 @@ class Board {
     position[move.startingSquare] = selectedPiece;
     position[move.targetSquare] = capturedPiece;
     whiteToPlay = !whiteToPlay;
+    plyCount--;
   }
 
   int castlingRightsAsInt() {

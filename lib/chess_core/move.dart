@@ -1,5 +1,5 @@
-import 'package:ace/chess_engine/helpers/board_helper.dart';
-import 'package:ace/chess_engine/core/piece.dart';
+import 'package:ace/chess_core/board_helper.dart';
+import 'package:ace/chess_core/piece.dart';
 
 class Move {
   final int startingSquare;
@@ -37,15 +37,10 @@ class Move {
     }
   }
 
+  /// UCI notation, e.g. "e2e4" or "e7e8q"
   String toChessNotation() {
-    String files = "abcdefgh";
-
-    int startingFile = BoardHelper.getFileFromIndex(startingSquare);
-    int startingRank = 8 - BoardHelper.getRankFromIndex(startingSquare);
-    int targetFile = BoardHelper.getFileFromIndex(targetSquare);
-    int targetRank = 8 - BoardHelper.getRankFromIndex(targetSquare);
-
-    return "${files[startingFile]}$startingRank${files[targetFile]}$targetRank";
+    String promotionLetter = promotion == 0 ? "" : " qnrb"[promotion];
+    return "${BoardHelper.squareName(startingSquare)}${BoardHelper.squareName(targetSquare)}$promotionLetter";
   }
 
   bool isSameAs(Move checkingMove) {

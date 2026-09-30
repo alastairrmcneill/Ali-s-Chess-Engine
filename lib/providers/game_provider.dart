@@ -1,22 +1,24 @@
-import 'package:ace/chess_engine/ai/evaluation.dart';
-import 'package:ace/chess_engine/core/board.dart';
-import 'package:ace/chess_engine/ai/engine.dart';
-import 'package:ace/chess_engine/core/move.dart';
-import 'package:ace/chess_engine/core/move_generator.dart';
-import 'package:ace/chess_engine/core/piece.dart';
-import 'package:ace/chess_engine/core/zobrist.dart';
+import 'package:ace/chess_core/board.dart';
+import 'package:ace/chess_core/fen.dart';
+import 'package:ace/chess_core/game_result.dart';
+import 'package:ace/chess_core/move.dart';
+import 'package:ace/chess_core/move_generator.dart';
+import 'package:ace/chess_core/piece.dart';
+import 'package:ace/chess_core/uci.dart';
+import 'package:ace/engines/chess_engine.dart';
+import 'package:ace/engines/engine_registry.dart';
 import 'package:flutter/material.dart';
 
+export 'package:ace/chess_core/game_result.dart' show Result;
+
 class GameProvider extends ChangeNotifier {
-  Zobrist zobrist = Zobrist(); // Needed to initialise the zobrist values before hashing can begin
   Board _board = Board();
   List<Move> _moveHistory = [];
   MoveGenerator _moveGenerator = MoveGenerator();
-  int? _selectedIndex = null;
+  int? _selectedIndex;
   Result _gameResult = Result.playing;
   List<Move> _legalMoves = [];
-  Evaluation _evaluation = Evaluation();
-  Engine _engine = Engine();
+  final ChessEngine _engine = createEngine(latestEngineId);
   bool _engineThinking = false;
   int _thinkingTime = 2000;
 
@@ -29,18 +31,16 @@ class GameProvider extends ChangeNotifier {
     _legalMoves = _moveGenerator.generateLegalMoves(_board);
     _engineThinking = false;
     _moveHistory = [];
+    _engine.newGame();
   }
 
   Board get board => _board;
-  MoveGenerator get moveGenerator => _moveGenerator;
   Result get gameResult => _gameResult;
   bool get whiteToPlay => _board.whiteToPlay;
   int? get selectedIndex => _selectedIndex;
   List<Move> get legalMoves => _legalMoves;
-  int get currentEval => _evaluation.evaluate(_board);
   bool get engineThinking => _engineThinking;
   Move get lastMove => _moveHistory.isNotEmpty ? _moveHistory.last : Move.invalid;
-  int get zobristKey => _board.zobristKey;
   int get thinkingTime => _thinkingTime;
 
   set selectedIndex(int? index) {
@@ -108,8 +108,21 @@ class GameProvider extends ChangeNotifier {
       setEngineThinking(true);
       await updateDisplay();
 
-      // Find best move in this position
-      Move? engineMove = await _engine.getBestMove(board, _thinkingTime);
+      // Ask the engine for its best move, sending the game so far as FEN + UCI moves
+      SearchResult result = await _engine.search(
+        EnginePosition(
+          startFen: FenPosition.startingFen,
+          uciMoves: _moveHistory.map((move) => move.toChessNotation()).toList(),
+        ),
+        SearchLimits(moveTimeMs: _thinkingTime),
+      );
+      Move? engineMove = result.bestMove == null ? null : Uci.toLegalMove(_board, result.bestMove!, _moveGenerator);
+
+      // v1 can occasionally suggest an illegal move (see docs/engine_v1_known_issues.md), so never let the game stall
+      if (engineMove == null) {
+        List<Move> legalMoves = _moveGenerator.generateLegalMoves(_board);
+        if (legalMoves.isNotEmpty) engineMove = legalMoves.first;
+      }
 
       // Update display to give user feedback
       setEngineThinking(false);
@@ -152,106 +165,11 @@ class GameProvider extends ChangeNotifier {
   _getGameResult() {
     // Check all possible end game conditions
     _legalMoves = _moveGenerator.generateLegalMoves(_board);
-
-    // Check if stalemate or checkmate
-    if (legalMoves.isEmpty) {
-      if (_moveGenerator.opponentAttackMap.contains(_moveGenerator.friendlyKingIndex)) {
-        _gameResult = _board.whiteToPlay ? Result.whiteIsMated : Result.blackIsMated;
-        return;
-      }
-      _gameResult = Result.stalemate;
-      return;
-    }
-
-    // Check 50 moves
-    if (_board.fiftyMoveRule >= 100) {
-      _gameResult = Result.fiftyMoveRule;
-      return;
-    }
-
-    // Check 3 repetition
-    if (_board.hashHistory.values.any((element) => element >= 3)) {
-      _gameResult = Result.repeition;
-
-      return;
-    }
-
-    // Check insufficient material
-    int numQueens = 0;
-    int numRooks = 0;
-    int numBishops = 0;
-    List<int> whiteBishops = [];
-    List<int> blackBishops = [];
-    int numKnights = 0;
-    int numPawns = 0;
-
-    for (int i = 0; i < _board.position.length; i++) {
-      int piece = _board.position[i];
-
-      int pieceType = Piece.type(piece);
-      switch (pieceType) {
-        case Piece.queen:
-          numQueens++;
-          break;
-        case Piece.rook:
-          numRooks++;
-          break;
-        case Piece.bishop:
-          numBishops++;
-          Piece.isColor(piece, Piece.white) ? whiteBishops.add(i) : blackBishops.add(i);
-          break;
-        case Piece.knight:
-          numKnights++;
-          break;
-        case Piece.pawn:
-          numPawns++;
-          break;
-        default:
-          break;
-      }
-    }
-
-    if (numPawns + numRooks + numQueens + numKnights + numBishops == 0) {
-      _gameResult = Result.insufficientMaterial;
-      return;
-    } else if (numPawns + numRooks + numQueens == 0) {
-      if ((numKnights == 1 && numBishops == 0) || (numBishops == 1 && numKnights == 0)) {
-        _gameResult = Result.insufficientMaterial;
-        return;
-      }
-
-      if (numKnights == 0 && whiteBishops.length == 1 && blackBishops.length == 1) {
-        // Check if the bishops are on the same squares
-        int whiteBishopRank = whiteBishops[0] % 8;
-        int whiteBishopFile = whiteBishops[0] ~/ 8;
-        int blackBishopRank = blackBishops[0] % 8;
-        int blackBishopFile = blackBishops[0] ~/ 8;
-        int whiteSquareColor = (whiteBishopFile + whiteBishopRank) % 2;
-        int blackSquareColor = (blackBishopFile + blackBishopRank) % 2;
-
-        if (whiteSquareColor == blackSquareColor) {
-          _gameResult = Result.insufficientMaterial;
-          return;
-        }
-      }
-    }
-
-    // If all pass then we are still playing
-    _gameResult = Result.playing;
+    _gameResult = GameResult.check(_board);
   }
 
   Future updateDisplay() async {
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 30));
   }
-}
-
-enum Result {
-  playing,
-  whiteIsMated,
-  blackIsMated,
-  stalemate,
-  repeition,
-  fiftyMoveRule,
-  insufficientMaterial,
 }

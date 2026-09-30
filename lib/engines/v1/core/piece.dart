@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 class Piece {
   static const int none = 0;
   static const int king = 1;
@@ -67,41 +65,6 @@ class Piece {
   static bool isQueenOrRook(int piece) {
     int pieceType = Piece.type(piece);
     return (pieceType == queen || pieceType == rook);
-  }
-
-  static Widget getImg(int piece) {
-    String imgString = "";
-    if (isColor(piece, white)) {
-      imgString += "w";
-    } else {
-      imgString += "b";
-    }
-
-    switch (type(piece)) {
-      case 1:
-        imgString += "k";
-        break;
-      case 2:
-        imgString += "p";
-        break;
-      case 3:
-        imgString += "n";
-        break;
-      case 4:
-        imgString += "b";
-        break;
-      case 5:
-        imgString += "r";
-        break;
-      case 6:
-        imgString += "q";
-        break;
-      default:
-        imgString += "0";
-        break;
-    }
-
-    return Image.asset("assets/$imgString.png");
   }
 
   static String print(int piece) {

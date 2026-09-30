@@ -1,10 +1,10 @@
 import 'dart:math';
 
-import 'package:ace/chess_engine/ai/piece_square_tables.dart';
-import 'package:ace/chess_engine/core/board.dart';
-import 'package:ace/chess_engine/helpers/board_helper.dart';
-import 'package:ace/chess_engine/core/piece.dart';
-import 'package:ace/chess_engine/core/precompute_data.dart';
+import 'package:ace/engines/v1/ai/piece_square_tables.dart';
+import 'package:ace/engines/v1/core/board.dart';
+import 'package:ace/engines/v1/helpers/board_helper.dart';
+import 'package:ace/engines/v1/core/piece.dart';
+import 'package:ace/engines/v1/core/precompute_data.dart';
 
 class Evaluation {
   PrecomputeData precomputeData = PrecomputeData();

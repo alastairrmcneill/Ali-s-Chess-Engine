@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:ace/chess_engine/helpers/board_helper.dart';
+import 'package:ace/chess_core/board_helper.dart';
 
 // Run once at the start of the program to get common information in the move generation sequence
 
