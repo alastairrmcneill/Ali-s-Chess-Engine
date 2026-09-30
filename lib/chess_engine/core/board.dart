@@ -52,6 +52,23 @@ class Board {
     return FENUtility.loadPositionFromFEN("rnbq1bnr/pppkpppp/8/1P1p4/8/P7/2PPPPPP/RNBQKBNR b KQkq - 0 1");
   }
 
+  Board.fromFEN(String fen) {
+    LoadedPositionInfo loadedPositionInfo = FENUtility.loadPositionFromFEN(fen);
+
+    position = loadedPositionInfo.position;
+    whiteToPlay = loadedPositionInfo.whiteToMove;
+    enPassantSquare = loadedPositionInfo.enPassantSquare;
+    whiteCastleKingSide = loadedPositionInfo.whiteCastleKingSide;
+    whiteCastleQueenSide = loadedPositionInfo.whiteCastleQueenSide;
+    blackCastleKingSide = loadedPositionInfo.blackCastleKingSide;
+    blackCastleQueenSide = loadedPositionInfo.blackCastleQueenSide;
+
+    zobristKey = Zobrist.getZobristForBoard(this);
+    gameStateHistory = [];
+    fiftyMoveRule = 0;
+    gamePosition = 0;
+  }
+
   makeMove(Move move) {
     // Set up current game state
     GameState gameState = GameState();

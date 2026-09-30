@@ -1,8 +1,8 @@
 import 'package:ace/chess_engine/core/board.dart';
-import 'package:ace/chess_engine/helpers/board_helper.dart';
 import 'package:ace/chess_engine/core/move.dart';
 import 'package:ace/chess_engine/core/piece.dart';
 import 'package:ace/chess_engine/core/precompute_data.dart';
+import 'package:ace/chess_engine/helpers/board_helper.dart';
 
 class MoveGenerator {
   late List<Move> moves;
@@ -377,19 +377,17 @@ class MoveGenerator {
         bool movePreventsCheck = checkedRayIndexes.contains(targetIndex);
 
         // If we aren't in check OR this move prevents check then we can add it
-        // If we are in check AND this move doesn't prevent it then skip
-        if (inCheck && !movePreventsCheck) continue;
-
+        // If we are in check AND this move doesn't prevent it then skip adding it, but still stop at any piece below
         // For the quiescence search only add moves if its a capture unless we are doing a full search then add all moves
-        if (isCapture || generateQuietMoves) {
+        if ((!inCheck || movePreventsCheck) && (isCapture || generateQuietMoves)) {
           moves.add(Move(
             startingSquare: startingIndex,
             targetSquare: targetIndex,
           ));
         }
 
-        if (isCapture || movePreventsCheck)
-          break; // If you capture a piece you can't keep going past it in this direction
+        // If you capture a piece you can't keep going past it in this direction
+        if (isCapture || movePreventsCheck) break;
       }
     }
   }

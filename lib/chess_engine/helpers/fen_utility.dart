@@ -47,7 +47,13 @@ class FENUtility {
     loadedPositionInfo.blackCastleQueenSide = sections[2].contains("q");
 
     // En passant square
-    // loadedPositionInfo.enPassantSquare = int.parse(sections[3]);
+    String files = "abcdefgh";
+    if (sections[3] != "-") {
+      //e.g. e6 = 20
+      int file = files.indexOf(sections[3][0]);
+      int rank = int.parse(sections[3][1]);
+      loadedPositionInfo.enPassantSquare = (8 - rank) * 8 + file;
+    }
 
     // Ply count
     loadedPositionInfo.plyCount = int.parse(sections[4]);
@@ -122,7 +128,7 @@ class FENUtility {
     // En-passant
     fen += ' ';
     int enPassantFile = board.enPassantSquare % 8;
-    int enPassantRank = board.enPassantSquare ~/ 8;
+    int enPassantRank = 8 - board.enPassantSquare ~/ 8;
 
     String files = "abcdefgh";
 
