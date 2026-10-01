@@ -1,8 +1,8 @@
-import 'package:ace/chess_engine/core/board.dart';
-import 'package:ace/chess_engine/core/move.dart';
-import 'package:ace/chess_engine/core/piece.dart';
-import 'package:ace/chess_engine/core/precompute_data.dart';
-import 'package:ace/chess_engine/helpers/board_helper.dart';
+import 'package:ace/engines/v1/core/board.dart';
+import 'package:ace/engines/v1/core/move.dart';
+import 'package:ace/engines/v1/core/piece.dart';
+import 'package:ace/engines/v1/core/precompute_data.dart';
+import 'package:ace/referee/rules/board_helper.dart';
 
 class MoveGenerator {
   late List<Move> moves;
