@@ -90,7 +90,6 @@ lib/
     referee.dart                     # Referee class
     san.dart                         # SAN writer + parser (for PGN in and out)
     game_end.dart                    # GameTermination enum, GameOutcome enum, GameEnd class
-    square_utils.dart                # index 0..63 ⇄ "a8".."h1" (no Move types)
   match_manager/
     match_config.dart
     pgn_reader.dart                  # splits/tokenises PGN text (headers, comments, variations…)
@@ -425,6 +424,7 @@ referee isn't an engine being measured.
 |---|---|---|---|
 | R1 | `helpers/fen_utility.dart` `loadPositionFromFEN` | Tolerate FENs with 4 fields (default half-move `0`, full-move `1`). Store the half-move clock under a correctly named field, `halfMoveClock`, instead of `plyCount`. Also parse the full-move number | Opening FENs vary. Today a 4-field FEN crashes on `sections[4]` |
 | R2 | `core/board.dart` `Board.fromFEN` | `fiftyMoveRule = loadedPositionInfo.halfMoveClock;` | Otherwise the fifty-move rule is wrong for positions that don't start at 0 |
+| R3 | `helpers/board_helper.dart` | Add `squareName(int)` and `squareIndex(String)` (see 2.3) | Index ⇄ `"e4"` conversion for UCI, used by the referee and the app |
 
 Don't touch `makeMove`/`unMakeMove`/the move generator.
 
@@ -451,10 +451,15 @@ class GameEnd {
 }
 ```
 
-### 2.3 `lib/referee/square_utils.dart`
-Pure string/int helpers for the referee and the app. They know nothing about any `Move` class:
-- `String squareName(int index)`: a8 = 0 … h1 = 63, so `'abcdefgh'[index % 8] + '${8 - index ~/ 8}'`.
-- `int squareIndex(String name)`: the inverse.
+### 2.3 Square-name helpers: in the referee's `BoardHelper`
+There's no separate utils file. Add two static methods to the referee's copy of
+`lib/referee/rules/helpers/board_helper.dart` (next to `getFileFromIndex`/`getRankFromIndex`):
+- `static String squareName(int index)`: a8 = 0 … h1 = 63, so `'abcdefgh'[getFileFromIndex(index)] + '${8 - getRankFromIndex(index)}'`.
+- `static int squareIndex(String name)`: the inverse, `(8 - rank) * 8 + file`.
+
+These are additions, not rules changes, so they're fine in the frozen rules copy (see R3 in 2.1).
+The referee and the app (Phase 9) use `BoardHelper.squareName`/`squareIndex`. The v1 adapter keeps its
+own private copy, because snapshots can't import outside themselves.
 
 > **Where's `toUci`?** Converting a `Move` to UCI depends on how that `Move` is represented, and
 > that's private to each codebase. So there's **no shared `toUci`**. Each side owns its own:
@@ -551,7 +556,7 @@ Implementation notes:
 - **`tryPlayUci`:**
   1. Validate the format: `RegExp(r'^[a-h][1-8][a-h][1-8][qrbn]?$')`. If it doesn't match, it's malformed.
   2. Find the move: the first `m` in `_legal()` where `_toUci(m) == uci`. `_toUci` is a private method
-     on `Referee`: `squareName(m.startingSquare) + squareName(m.targetSquare)`, plus `'qnrb'[m.promotion - 1]`
+     on `Referee`: `BoardHelper.squareName(m.startingSquare) + BoardHelper.squareName(m.targetSquare)`, plus `'qnrb'[m.promotion - 1]`
      if `m.promotion != 0`. If there isn't one, it's illegal.
      That makes `e7e8` (no piece) **illegal** when a promotion is required. That's correct and strict.
   3. Call `_apply(m)`.
@@ -1084,7 +1089,8 @@ Methods (keep the public names the GUI already uses where you can):
   codes as today, so `PieceImage.forPiece` and `square.dart` keep working. Just switch `PieceImage`'s import
   of `Piece` to `package:ace/referee/rules/core/piece.dart`.
 - `List<int> legalTargetsFrom(int index)`: from `_referee.legalUciMoves()`, keep those starting at
-  `squareName(index)` and map the target to an index.
+  `BoardHelper.squareName(index)` and map the target back with `BoardHelper.squareIndex`. Import
+  `BoardHelper` from `package:ace/referee/rules/helpers/board_helper.dart`.
 - `bool get whiteToPlay => _referee.whiteToMove;`
 - `({int from, int to})? get lastMove`: from the last UCI in `uciHistory`.
 - `move(int targetIndex)`: build the UCI from `_selectedIndex` → `targetIndex`. If a pawn moves to the last
