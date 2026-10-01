@@ -1,5 +1,5 @@
-import 'package:ace/chess_engine/helpers/board_helper.dart';
-import 'package:ace/chess_engine/core/piece.dart';
+import 'package:ace/referee/rules/board_helper.dart';
+import 'package:ace/engines/v1/core/piece.dart';
 
 class Move {
   final int startingSquare;

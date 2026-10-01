@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:ace/chess_engine/ai/evaluation.dart';
-import 'package:ace/chess_engine/ai/move_ordering.dart';
-import 'package:ace/chess_engine/ai/transposition_table.dart';
-import 'package:ace/chess_engine/core/board.dart';
-import 'package:ace/chess_engine/core/move.dart';
-import 'package:ace/chess_engine/core/move_generator.dart';
+import 'package:ace/engines/v1/ai/evaluation.dart';
+import 'package:ace/engines/v1/ai/move_ordering.dart';
+import 'package:ace/engines/v1/ai/transposition_table.dart';
+import 'package:ace/engines/v1/core/board.dart';
+import 'package:ace/engines/v1/core/move.dart';
+import 'package:ace/engines/v1/core/move_generator.dart';
 
 class Engine {
   Evaluation evaluation = Evaluation();

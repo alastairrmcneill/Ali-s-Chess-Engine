@@ -1,4 +1,4 @@
-import 'package:ace/chess_engine/core/move.dart';
+import 'package:ace/engines/v1/core/move.dart';
 
 class TranspositionTable {
   final Map<int, TranspositionTableEntry> _table = {};

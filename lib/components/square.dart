@@ -1,4 +1,4 @@
-import 'package:ace/chess_engine/core/piece.dart';
+import 'package:ace/components/piece_image.dart';
 import 'package:flutter/material.dart';
 
 class Square extends StatelessWidget {
@@ -54,7 +54,7 @@ class Square extends StatelessWidget {
                 feedback: SizedBox(
                   width: MediaQuery.of(context).size.width / 8,
                   height: MediaQuery.of(context).size.width / 8,
-                  child: piece == 0 ? null : Piece.getImg(piece),
+                  child: piece == 0 ? null : pieceImage(piece),
                 ),
                 onDragStarted: onDragStarted,
                 childWhenDragging: Container(
@@ -67,7 +67,7 @@ class Square extends StatelessWidget {
                   child: SizedBox(
                     width: MediaQuery.of(context).size.width / 8,
                     height: MediaQuery.of(context).size.width / 8,
-                    child: piece == 0 ? const SizedBox() : Piece.getImg(piece),
+                    child: piece == 0 ? const SizedBox() : pieceImage(piece),
                   ),
                 ),
               )
@@ -96,7 +96,7 @@ class Square extends StatelessWidget {
                           : Stack(
                               children: [
                                 Text(index.toString()),
-                                Piece.getImg(piece),
+                                pieceImage(piece),
                                 isSquareValid
                                     ? Container(
                                         margin: const EdgeInsets.all(2),

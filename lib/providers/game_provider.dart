@@ -1,10 +1,10 @@
-import 'package:ace/chess_engine/ai/evaluation.dart';
-import 'package:ace/chess_engine/core/board.dart';
-import 'package:ace/chess_engine/ai/engine.dart';
-import 'package:ace/chess_engine/core/move.dart';
-import 'package:ace/chess_engine/core/move_generator.dart';
-import 'package:ace/chess_engine/core/piece.dart';
-import 'package:ace/chess_engine/core/zobrist.dart';
+import 'package:ace/engines/v1/ai/evaluation.dart';
+import 'package:ace/engines/v1/core/board.dart';
+import 'package:ace/engines/v1/ai/engine.dart';
+import 'package:ace/engines/v1/core/move.dart';
+import 'package:ace/engines/v1/core/move_generator.dart';
+import 'package:ace/engines/v1/core/piece.dart';
+import 'package:ace/engines/v1/core/zobrist.dart';
 import 'package:flutter/material.dart';
 
 class GameProvider extends ChangeNotifier {
