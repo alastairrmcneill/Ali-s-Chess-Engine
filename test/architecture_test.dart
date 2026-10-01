@@ -21,4 +21,31 @@ void main() {
     }
     expect(offenders, isEmpty);
   });
+
+  // Each engine version must be self-contained so changing one can never change another. Several versions (and
+  // chess_core) have classes with the same names (Board, Move, MoveGenerator...), and Dart treats them as different
+  // types, so a wrong import gives confusing "Board can't be assigned to Board" errors. The only shared code an
+  // engine may use is the engine interface and the neutral FEN/UCI parsing, which have no Board or Move types.
+  test("engine versions only import their own code", () {
+    const List<String> allowedShared = [
+      "package:ace/engines/chess_engine.dart",
+      "package:ace/chess_core/fen.dart",
+      "package:ace/chess_core/uci.dart",
+    ];
+    List<String> offenders = [];
+    for (FileSystemEntity versionFolder in Directory("lib/engines").listSync()) {
+      if (versionFolder is! Directory) continue;
+      String version = versionFolder.path.split("/").last;
+      for (FileSystemEntity file in versionFolder.listSync(recursive: true)) {
+        if (file is! File || !file.path.endsWith(".dart")) continue;
+        for (Match import in RegExp(r"import\s+'([^']+)'").allMatches(file.readAsStringSync())) {
+          String uri = import.group(1)!;
+          bool ownCode = uri.startsWith("package:ace/engines/$version/");
+          bool allowed = ownCode || uri.startsWith("dart:") || allowedShared.contains(uri);
+          if (!allowed) offenders.add("${file.path} imports $uri");
+        }
+      }
+    }
+    expect(offenders, isEmpty);
+  });
 }

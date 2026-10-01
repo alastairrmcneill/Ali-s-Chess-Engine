@@ -56,6 +56,7 @@ void main() {
     Zobrist();
     const Map<String, List<int>> knownV1Differences = {
       "position 3": [14, 191, 2812, 43238, 674630], // Correct depth 5 count is 674624
+      "position 5": [44, 1486, 62379, 2103790], // Correct depth 4 count is 2103487
     };
 
     for (PerftCase perftCase in perftCases) {

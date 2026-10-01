@@ -1,3 +1,4 @@
+import 'package:ace/engines/engine_registry.dart';
 import 'package:ace/main_match.dart';
 import 'package:ace/match/game_record.dart';
 import 'package:ace/match_ui/game_viewer_screen.dart';
@@ -28,7 +29,7 @@ void main() {
   testWidgets("match setup screen lists engines and starts empty", (tester) async {
     await tester.pumpWidget(const MatchManagerApp());
     expect(find.text("ACE Match Manager"), findsOneWidget);
-    expect(find.text("v1"), findsNWidgets(2));
+    expect(find.text(latestEngineId), findsNWidgets(2)); // Both engines default to the latest version
     expect(find.text("Start match"), findsOneWidget);
   });
 
