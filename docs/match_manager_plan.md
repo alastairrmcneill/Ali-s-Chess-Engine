@@ -90,7 +90,7 @@ lib/
     referee.dart                     # Referee class
     san.dart                         # SAN writer + parser (for PGN in and out)
     game_end.dart                    # GameTermination enum, GameOutcome enum, GameEnd class
-    square_utils.dart                # index 0..63 ⇄ "a8".."h1", toUci
+    square_utils.dart                # index 0..63 ⇄ "a8".."h1" (no Move types)
   match_manager/
     match_config.dart
     pgn_reader.dart                  # splits/tokenises PGN text (headers, comments, variations…)
@@ -310,7 +310,7 @@ Helpers in the same file (they're adapter code, so they don't count as editing v
 
 - `String squareName(int index)`: v1 uses index 0 = a8, 7 = h8, 56 = a1, 63 = h1.
   `file = index % 8`, `rank = 8 - index ~/ 8`, giving `'abcdefgh'[file] + '$rank'`.
-- `String toUci(Move m)`: `squareName(m.startingSquare) + squareName(m.targetSquare)`, plus a
+- `String toUci(Move m)` (private to this adapter, because it depends on v1's `Move` class): `squareName(m.startingSquare) + squareName(m.targetSquare)`, plus a
   promotion suffix from `m.promotion`: `1→'q'`, `2→'n'`, `3→'r'`, `4→'b'` (see
   `Move.promotingPiece()`). **Don't use `Move.toChessNotation()`. It drops the promotion piece
   (bug B1).** Castling is the king's move (`e1g1`), which is what v1 already generates.
@@ -452,11 +452,18 @@ class GameEnd {
 ```
 
 ### 2.3 `lib/referee/square_utils.dart`
-Shared helpers for the referee and the app (the v1 adapter keeps its own private copies, because
-snapshots can't import outside themselves):
+Pure string/int helpers for the referee and the app. They know nothing about any `Move` class:
 - `String squareName(int index)`: a8 = 0 … h1 = 63, so `'abcdefgh'[index % 8] + '${8 - index ~/ 8}'`.
 - `int squareIndex(String name)`: the inverse.
-- `String toUci(Move m)`: from + to, plus `'qnrb'[m.promotion - 1]` if `m.promotion != 0`.
+
+> **Where's `toUci`?** Converting a `Move` to UCI depends on how that `Move` is represented, and
+> that's private to each codebase. So there's **no shared `toUci`**. Each side owns its own:
+> - **Each engine's adapter** has a private `toUci`/`_findMove` for *its* `Move` type (Phase 1.3).
+>   A future v5 with bitboards and 16-bit packed moves writes a different one in its own adapter.
+> - **The referee** has a private `_toUci` in `referee.dart` for the *referee's* `Move`
+>   (`lib/referee/rules/core/move.dart`).
+>
+> UCI strings are the only thing they share. That's the whole point of the string interface.
 
 ### 2.4 `lib/referee/san.dart`: writing and reading SAN
 SAN is needed in two places: **reading** your openings PGN and **writing** `games.pgn`. The trick that
@@ -543,7 +550,9 @@ Implementation notes:
 - **`fen`:** `FENUtility.fenFromBoard(_board)` gives 4 fields. Append `' ${_board.fiftyMoveRule} $_fullMoveNumber'`.
 - **`tryPlayUci`:**
   1. Validate the format: `RegExp(r'^[a-h][1-8][a-h][1-8][qrbn]?$')`. If it doesn't match, it's malformed.
-  2. Find the move: the first `m` in `_legal()` where `toUci(m) == uci`. If there isn't one, it's illegal.
+  2. Find the move: the first `m` in `_legal()` where `_toUci(m) == uci`. `_toUci` is a private method
+     on `Referee`: `squareName(m.startingSquare) + squareName(m.targetSquare)`, plus `'qnrb'[m.promotion - 1]`
+     if `m.promotion != 0`. If there isn't one, it's illegal.
      That makes `e7e8` (no piece) **illegal** when a promotion is required. That's correct and strict.
   3. Call `_apply(m)`.
 - **`tryPlaySan`:** `m = San.parse(_board, san, _legal())`. If it's null, return `'illegal or ambiguous SAN: $san'`.
