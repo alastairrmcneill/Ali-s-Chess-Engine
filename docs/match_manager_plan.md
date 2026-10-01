@@ -19,7 +19,8 @@ phases in order. Each one builds on the last and ends with something you can run
 | Versioning | **Snapshot folders**: `lib/engines/v1/`, `lib/engines/v2/`, … Each one is fully self-contained and frozen once superseded |
 | Engine protocol | In-process Dart interface that only speaks **strings**: start FEN + list of UCI moves in, UCI move out |
 | Time control | **Fixed time per move**, set per match with `--movetime` |
-| Openings | **Your existing PGN file**. Each position is played **twice with colours swapped** |
+| Openings | **Your existing PGN file**, read by your own PGN/SAN parser. Each position is played **twice with colours swapped** |
+| Third-party chess code | **None.** The referee, SAN and PGN handling are all written by you (only `args` is used, for CLI flags) |
 | Match size | **Fixed 1000 games, run in series** (parallel play is a side note at the end) |
 | Termination | Normal chess rules, plus **illegal move / crash / no move = loss (logged)**, plus **draw after 300 moves** (600 plies) |
 | Output | W/D/L, Elo ± error, score by colour, PGN of every game, average depth/nodes/time per engine, termination breakdown, error log |
@@ -49,8 +50,9 @@ phases in order. Each one builds on the last and ends with something you can run
                                                                 lib/engines/v2/adapter.dart  (wraps v2)
                                                                 lib/engines/random/…         (sanity checks)
 
-                Referee (wraps the `chess` pub package): the neutral judge. It is used by
-                the match manager AND by the app, so neither depends on any engine version's rules code.
+                Referee (lib/referee/): the neutral judge, built from YOUR code: a frozen, perft-tested copy of
+                the rules core + your own game-end and SAN logic. It is used by the match manager AND by the app,
+                so neither depends on any engine version's code. No third-party chess packages.
 ```
 
 ### Three rules that keep this sane
@@ -60,9 +62,9 @@ phases in order. Each one builds on the last and ends with something you can run
    (Phase 1).
 2. **Nothing outside a snapshot ever touches its `Board`/`Move` types.** Everything crosses the
    boundary as strings (FEN and UCI like `e2e4`, `e7e8q`, `e1g1`).
-3. **The referee is not your engine's code.** If `v2`'s move generator has a bug, an independent
-   referee catches it as an illegal move. If the referee shared code with the engine, both would
-   agree on the wrong answer.
+3. **The referee is separate from every engine.** It has its own frozen copy of the rules code that
+   no engine version touches. If `v2`'s move generator gets a bug, the referee catches it as an
+   illegal move. If the referee used v2's code, both would agree on the wrong answer.
 
 ### Target folder layout (when everything is done)
 
@@ -84,11 +86,14 @@ lib/
       ai/ core/ helpers/ extensions/ # frozen copy of today's lib/chess_engine + lib/extensions
     v2/ …                            # same shape
   referee/
-    referee.dart                     # Referee class (wraps package:chess)
+    rules/                           # frozen copy of the rules core (core/ helpers/ extensions/, no ai/)
+    referee.dart                     # Referee class
+    san.dart                         # SAN writer + parser (for PGN in and out)
     game_end.dart                    # GameTermination enum, GameOutcome enum, GameEnd class
-    square_utils.dart                # index 0..63 ⇄ "a8".."h1" helpers
+    square_utils.dart                # index 0..63 ⇄ "a8".."h1", toUci
   match_manager/
     match_config.dart
+    pgn_reader.dart                  # splits/tokenises PGN text (headers, comments, variations…)
     opening_book.dart
     game_record.dart
     game_runner.dart
@@ -141,25 +146,11 @@ Fix (a pure move, no behaviour change):
 Do this **before** the Phase 1 snapshot, so v1 is born Flutter-free.
 
 ### 0.3 Dependencies
-Add to `pubspec.yaml` under `dependencies:` (not dev, because files in `lib/` import them):
+Add to `pubspec.yaml` under `dependencies:`:
 ```yaml
-  chess: ^0.8.1      # referee: legal moves, SAN, FEN, PGN parsing
-  args: ^2.4.2       # CLI argument parsing
+  args: ^2.4.2       # CLI argument parsing (optional: parse `List<String> args` by hand if you prefer)
 ```
-Then run `flutter pub get`.
-
-> `chess` 0.8.1 declares `sdk: <3.0.0`. Dart 3 still accepts packages whose lower bound is ≥ 2.12,
-> so this resolves fine. If pub ever complains, pin `chess: 0.8.1` exactly.
-
-Its API uses old snake_case names. The ones you'll need:
-`Chess()`, `Chess.fromFEN(fen)`, `fen`, `turn` (`Color.WHITE`/`Color.BLACK`), `generate_moves()` → `List<Move>`
-(each `Move` has `fromAlgebraic`, `toAlgebraic`, `promotion?.name` = `'q'|'r'|'b'|'n'`),
-`move_to_san(move)` (call it **before** making the move), `make_move(move)`, `in_check`,
-`in_checkmate`, `in_stalemate`, `insufficient_material`, `half_moves`, `move_number`,
-`load_pgn(text)`, `undo()`, `history` (list, one entry per ply), `game_over`, `get('e4')` → `Piece?` (`.type.name`, `.color`).
-
-> The package defines its own `Piece`, `Move` and `Color` classes, which clash with ACE's names.
-> Always import it with a prefix: `import 'package:chess/chess.dart' as ch;` and write `ch.Chess`, `ch.Move`, etc.
+Then run `flutter pub get`. **No chess packages.** Rules, SAN and PGN are all your own code (Phase 2–3).
 
 ### 0.4 Housekeeping
 - [ ] Add `match_results/` to `.gitignore`.
@@ -340,10 +331,9 @@ Helpers in the same file (they're adapter code, so they don't count as editing v
 4. **Two instances of the same version** (v1 vs v1) work fine: the shared static Zobrist tables are
    read-only after init, and everything else is per-instance.
 
-### 1.4 `lib/engines/random/random_engine.dart`
-A `ChessEngine` with `id 'random'` that loads `startFen` + moves into a `chess` package `Chess`
-object, and returns a random legal move as UCI. Take an optional `int? seed` for `Random(seed)`.
-Used for sanity matches (v1 should crush it) and in tests.
+### 1.4 Random engine: moved to Phase 2.7
+It needs a legal move list, which the referee provides. Leave the `'random'` registry line commented
+out until then.
 
 ### 1.5 `lib/engines/engine_registry.dart`
 ```dart
@@ -359,7 +349,7 @@ class EngineRegistry {
     // 'v2': () => v2.AceEngine(),
   };
   static final Map<String, ChessEngine Function()> _testEngines = {
-    'random': () => RandomEngine(),
+    // 'random': () => RandomEngine(),   // added in Phase 2.7
   };
 
   static List<String> get versionIds => _factories.keys.toList();                    // for the app picker
@@ -376,8 +366,9 @@ Prefixed imports (`as v1`) mean every adapter can use the same class name, `AceE
 
 ### 1.6 Tests (`test/engines/`)
 - `adapter_test.dart` (run for every id in `EngineRegistry.versionIds`):
-  - From the start position with `[]`, it returns a move that is legal per the `chess` package.
-    Use `moveTime: 50ms`.
+  - From the start position with `[]`, it returns a well-formed UCI move
+    (`^[a-h][1-8][a-h][1-8][qrbn]?$`) that appears in v1's own legal move list. Use `moveTime: 50ms`.
+    (In Phase 2.7 you'll strengthen this to "legal per the Referee".)
   - From `'4k3/1P6/8/8/8/8/8/4K3 w - - 0 1'` the returned move starts with `b7b8` and **has 5
     characters** (promotion suffix present).
   - Replaying `['e2e4','e7e5','g1f3','b8c6','f1c4','g8f6','e1g1']` (includes castling) doesn't
@@ -398,11 +389,45 @@ now because the app still uses it until Phase 9.
 
 ---
 
-## Phase 2: The referee
+## Phase 2: The referee (your own rules code, no packages)
 
-The neutral judge. It wraps `package:chess`. Used by the match manager now and by the app in Phase 9.
+The referee is the neutral judge. It's used by the match manager now and by the app in Phase 9. It's
+built from **your own code** in two parts:
 
-### 2.1 `lib/referee/game_end.dart`
+1. **A rules core:** a separate, frozen copy of today's board / move generator / FEN code in
+   `lib/referee/rules/`. It already passes perft, so it's a proven move generator.
+2. **Three things you write fresh:** UCI move matching, game-end detection, and SAN (the `Nf3` /
+   `exd5` notation that PGN files use).
+
+> **The trade-off, honestly.** The rules core starts from the same code as v1. So any rules bug
+> v1 has *today*, the referee has too, and it won't catch v1 making that mistake. It **will** catch
+> every *new* bug you introduce in v2, v3… (a bitboard rewrite, a faster move generator, a changed
+> `makeMove`), which is the real risk from here on. Two habits keep it trustworthy:
+> - The perft suite in 2.6 is stronger than today's. Perft is the best proof a move generator is
+>   correct.
+> - **Never edit `lib/referee/rules/` to make an engine pass.** Only fix genuine rules bugs, and add
+>   a test with each fix.
+
+### 2.1 Create the rules core
+Copy `core/`, `helpers/` and `extensions/` (**not** `ai/`) from `lib/chess_engine/` into
+`lib/referee/rules/`, rewriting imports to `package:ace/referee/rules/…`. The easiest way is to give
+`tool/snapshot_engine.dart` a `--dest <path>` option and a `--no-ai` flag. Doing it by hand once is
+also fine (it's about 10 files).
+
+Then make these **referee-only fixes** inside `lib/referee/rules/`. They're allowed because the
+referee isn't an engine being measured.
+
+| # | File | Change | Why |
+|---|---|---|---|
+| R1 | `helpers/fen_utility.dart` `loadPositionFromFEN` | Tolerate FENs with 4 fields (default half-move `0`, full-move `1`). Store the half-move clock under a correctly named field, `halfMoveClock`, instead of `plyCount`. Also parse the full-move number | Opening FENs vary. Today a 4-field FEN crashes on `sections[4]` |
+| R2 | `core/board.dart` `Board.fromFEN` | `fiftyMoveRule = loadedPositionInfo.halfMoveClock;` | Otherwise the fifty-move rule is wrong for positions that don't start at 0 |
+
+Don't touch `makeMove`/`unMakeMove`/the move generator.
+
+The `snapshot_purity_test.dart` from Phase 1 should also cover `lib/referee/rules/`: it may only
+import `dart:*` and itself.
+
+### 2.2 `lib/referee/game_end.dart`
 ```dart
 enum GameOutcome { whiteWins, blackWins, draw }
 
@@ -422,22 +447,79 @@ class GameEnd {
 }
 ```
 
-### 2.2 `lib/referee/referee.dart`
+### 2.3 `lib/referee/square_utils.dart`
+Shared helpers for the referee and the app (the v1 adapter keeps its own private copies, because
+snapshots can't import outside themselves):
+- `String squareName(int index)`: a8 = 0 … h1 = 63, so `'abcdefgh'[index % 8] + '${8 - index ~/ 8}'`.
+- `int squareIndex(String name)`: the inverse.
+- `String toUci(Move m)`: from + to, plus `'qnrb'[m.promotion - 1]` if `m.promotion != 0`.
+
+### 2.4 `lib/referee/san.dart`: writing and reading SAN
+SAN is needed in two places: **reading** your openings PGN and **writing** `games.pgn`. The trick that
+keeps this small is that **reading uses writing.** To parse `"Nbd2"`, generate the SAN for every legal
+move and pick the one that matches.
+
+```dart
+class San {
+  /// SAN for [move], which must be legal in [board]'s current position. [legal] = all legal moves here.
+  /// Set [withCheck] to false to skip the +/# suffix (faster; used when parsing).
+  static String fromMove(Board board, Move move, List<Move> legal, {bool withCheck = true});
+
+  /// The legal move matching a SAN token, or null if none matches (illegal or ambiguous).
+  static Move? parse(Board board, String token, List<Move> legal);
+}
+```
+
+**`fromMove` rules**, in order:
+1. **Castling:** if `move.castling`, return `'O-O'` when the target file is g (`targetSquare % 8 == 6`),
+   else `'O-O-O'`. Then add the check suffix (step 6).
+2. `type = Piece.type(board.position[move.startingSquare])`. The letters are K, Q, R, B, N.
+   A pawn gets no letter.
+3. `isCapture = board.position[move.targetSquare] != Piece.none || move.enPassantCapture`.
+4. **Pawn moves:** if it's a capture, the start file letter + `'x'`. Then the target square. If it's a
+   promotion, add `'='` + `'QNRB'[move.promotion - 1]` (v1 codes: 1 = Q, 2 = N, 3 = R, 4 = B).
+   Examples: `e4`, `exd5`, `exd6` (en passant), `b8=Q`, `bxa8=N`.
+5. **Piece moves:** letter + disambiguation + (`'x'` if capture) + target square.
+   **Disambiguation:** `others` = the legal moves with the same piece type, the same target, and a
+   different start square.
+   - `others` is empty, so add nothing (`Nf3`).
+   - No other shares the start **file**, so add the file (`Nbd2`).
+   - Otherwise, if no other shares the start **rank**, add the rank (`R1a3`).
+   - Otherwise add both (`Qa3b2`).
+6. **Check suffix** (only if `withCheck`): `board.makeMove(move)`, then generate the replies with a
+   **separate** `MoveGenerator` instance, read its `inCheck`, and `board.unMakeMove(move)`. If in
+   check, add `'#'` when there are no replies, else `'+'`.
+   > Use a separate generator because `generateLegalMoves` overwrites the generator's internal state
+   > (`inCheck`, attack maps). If the referee's main generator were reused here, its `inCheck` would
+   > describe the wrong position.
+
+**`parse` rules:**
+1. Normalise the token: strip trailing `+ # ! ?` characters. `0-0-0` becomes `O-O-O` and `0-0` becomes
+   `O-O`. Accept a promotion written without `=` (`e8Q` becomes `e8=Q`).
+2. For each legal `m`: if `fromMove(board, m, legal, withCheck: false) == normalised`, return `m`.
+3. Return null. That covers illegal moves **and** ambiguous ones like plain `Nd2` when two knights
+   can reach d2, which is correct because that's invalid SAN.
+
+### 2.5 `lib/referee/referee.dart`
 ```dart
 class Referee {
   Referee(String startFen, {this.maxPlies = 600});
   final String startFen;
-  final int maxPlies;                         // plies played *by the engines*, i.e. not opening moves
+  final int maxPlies;                         // plies played after startFen
 
-  String get fen;
+  String get fen;                             // full 6-field FEN of the current position
   bool get whiteToMove;
+  int pieceAt(int index);                     // the int piece code, used by the app's board UI
   List<String> get uciHistory;                // unmodifiable view
   List<String> get sanHistory;                // for PGN
   int get pliesPlayed;
   List<String> legalUciMoves();               // used by RandomEngine & the app
 
-  /// Returns null if legal and applied, otherwise a reason string ("malformed", "illegal: e2e5").
+  /// Returns null if legal and applied, otherwise a reason ("malformed: …", "illegal: e2e5").
   String? tryPlayUci(String uci);
+
+  /// Same, but for a SAN token. Used by the opening loader.
+  String? tryPlaySan(String san);
 
   /// Returns null while the game is still on.
   GameEnd? checkGameEnd();
@@ -445,34 +527,63 @@ class Referee {
 ```
 
 Implementation notes:
-- **Constructor:** `_chess = Chess.fromFEN(startFen)`. If the FEN has only 4 fields, append
-  `' 0 1'` first. Add the starting position's repetition key to the repetition map.
+- **Fields:** `Board _board`, `MoveGenerator _gen`, `List<Move>? _legalCache`, `int _fullMoveNumber`,
+  `Map<String,int> _repetitions`, `List<String> _uci, _san`.
+- **Zobrist:** `Board` updates a Zobrist key on every move, so initialise the referee copy's tables
+  once (`static bool _zobristReady`), exactly like the adapter does. The referee doesn't *use* the
+  hash. Repetition uses FEN keys (below), so the referee doesn't depend on hashing being right.
+- **Constructor:** `_board = Board.fromFEN(startFen)`. Read `_fullMoveNumber` from FEN field 6
+  (default 1). Record the starting position in `_repetitions`.
+- **`_legal()`:** `_legalCache ??= _gen.generateLegalMoves(_board)`. Set `_legalCache = null` after
+  every move. Read `_gen.inCheck` **right after** generating for the current position.
+- **`fen`:** `FENUtility.fenFromBoard(_board)` gives 4 fields. Append `' ${_board.fiftyMoveRule} $_fullMoveNumber'`.
 - **`tryPlayUci`:**
   1. Validate the format: `RegExp(r'^[a-h][1-8][a-h][1-8][qrbn]?$')`. If it doesn't match, it's malformed.
-  2. Find the move: loop `_chess.generate_moves()`, matching `m.fromAlgebraic == uci.substring(0,2)`,
-     `m.toAlgebraic == uci.substring(2,4)`, and `(m.promotion?.name ?? '') == (uci.length == 5 ? uci[4] : '')`.
+  2. Find the move: the first `m` in `_legal()` where `toUci(m) == uci`. If there isn't one, it's illegal.
      That makes `e7e8` (no piece) **illegal** when a promotion is required. That's correct and strict.
-  3. `san = _chess.move_to_san(m)` **before** `_chess.make_move(m)`. Push `uci`/`san`, then update the
-     repetition map.
-- **Repetition:** don't use `_chess.in_threefold_repetition`. It undoes and replays the whole game
-  every call, which is O(n²) per game. Keep your own `Map<String,int>` keyed by the **first 4 FEN
-  fields** (pieces, side, castling, ep), and increment it after each move. Threefold = the current
-  key's count ≥ 3.
+  3. Call `_apply(m)`.
+- **`tryPlaySan`:** `m = San.parse(_board, san, _legal())`. If it's null, return `'illegal or ambiguous SAN: $san'`.
+  Otherwise call `_apply(m)`.
+- **`_apply(m)`:** `san = San.fromMove(_board, m, _legal())` **before** making the move. Then
+  `wasBlack = !_board.whiteToPlay`, `_board.makeMove(m)`, and if `wasBlack` do `_fullMoveNumber++`.
+  Push the UCI and SAN, clear `_legalCache`, and increment `_repetitions[key]`.
+- **Repetition key:** the first 4 FEN fields (pieces, side, castling, en passant). This avoids
+  relying on Zobrist. Threefold = the current key's count ≥ 3.
+- **Insufficient material:** move the logic from `GameProvider._getGameResult` into a private method
+  `_insufficientMaterial()`: K v K, K+B v K, K+N v K, and K+B v K+B with bishops on the same colour
+  square. (In the existing code, `whiteBishopRank`/`File` are swapped in name only. The parity
+  `(file + rank) % 2` is still correct.)
 - **`checkGameEnd()` order** (the order matters):
-  1. `in_checkmate` gives a win to the side that just moved.
-  2. `in_stalemate` is a draw.
-  3. `insufficient_material` is a draw.
-  4. Repetition count ≥ 3 is a draw.
-  5. `half_moves >= 100` is a draw (fifty-move rule).
-  6. `pliesPlayed >= maxPlies` is a draw (`maxMoves`).
-  7. Otherwise `null`.
-  Mate is checked before the fifty-move rule because mate on the 100th half-move counts as mate.
+  1. `legal = _legal()`. If it's empty: when `_gen.inCheck`, it's **checkmate** and the side that
+     just moved wins. Otherwise it's **stalemate**.
+  2. Insufficient material is a draw.
+  3. Repetition count ≥ 3 is a draw.
+  4. `_board.fiftyMoveRule >= 100` is a draw.
+  5. `pliesPlayed >= maxPlies` is a draw (`maxMoves`).
+  6. Otherwise `null`.
+  Mate is checked first because mate on the 100th half-move counts as mate.
 
-### 2.3 `lib/referee/square_utils.dart`
-`String squareName(int index)` and `int squareIndex(String name)` using the a8 = 0 layout, the
-same as v1's GUI. Used by the app in Phase 9.
+### 2.6 Tests
+**`test/referee/san_test.dart`**
+| Position (FEN) | Move | Expected SAN |
+|---|---|---|
+| start | g1f3, e2e4 | `Nf3`, `e4` |
+| `4k3/8/8/8/8/5N2/8/1N2K3 w - - 0 1` | b1d2 / f3d2 | `Nbd2` / `Nfd2` (file disambiguation) |
+| `4k3/8/8/R7/8/8/8/R3K3 w - - 0 1` | a1a3 / a5a3 | `R1a3` / `R5a3` (rank disambiguation) |
+| `4k3/8/8/8/8/Q1Q5/8/Q3K3 w - - 0 1` | a1b2 / a3b2 / c3b2 | `Q1b2` / `Qa3b2` / `Qcb2` |
+| after `e2e4 d7d5` | e4d5 | `exd5` |
+| after `e2e4 a7a6 e4e5 d7d5` | e5d6 | `exd6` (en passant) |
+| `r3k3/1P6/8/8/8/8/8/4K3 w - - 0 1` | b7b8q / b7a8n | `b8=Q+` / `bxa8=N` |
+| after `e2e4 e7e5 g1f3 b8c6 f1c4 g8f6` | e1g1 | `O-O` |
+| after `f2f3 e7e5 g2g4` | d8h4 | `Qh4#` |
 
-### 2.4 Tests (`test/referee/referee_test.dart`)
+Also:
+- `parse` accepts `Nf3+`, `0-0`, `e8Q`, `exd5!?`. It returns null for `Nf4` at the start and for a plain
+  `Nd2` in the two-knights position (ambiguous).
+- **Round trip (the most valuable test):** play 20 random games of up to 200 plies with a seeded
+  `Random`. At every ply, for every legal move `m`, check `San.parse(board, San.fromMove(board, m, legal), legal)` returns `m`.
+
+**`test/referee/referee_test.dart`**
 | Test | Setup | Expect |
 |---|---|---|
 | legal move | start, `e2e4` | null, `uciHistory == ['e2e4']`, `sanHistory == ['e4']` |
@@ -482,15 +593,34 @@ same as v1's GUI. Used by the app in Phase 9.
 | underpromotion | same, `b7b8n` | accepted |
 | castling | after `e2e4 e7e5 g1f3 b8c6 f1c4 g8f6`, `e1g1` | accepted, SAN `O-O` |
 | en passant | `e2e4 a7a6 e4e5 d7d5 e5d6` | accepted |
+| SAN play | start, `tryPlaySan('Nf3')` | null, `uciHistory == ['g1f3']` |
 | fool's mate | `f2f3 e7e5 g2g4 d8h4` | `blackWins`, `checkmate` |
 | stalemate | `'7k/5Q2/6K1/8/8/8/8/8 b - - 0 1'` | `draw`, `stalemate` |
 | threefold | start, `g1f3 g8f6 f3g1 f6g8` ×2 | `draw`, `threefoldRepetition` after the 8th ply, not before |
-| fifty-move | `'8/8/8/8/8/8/R7/K6k w - - 99 80'` + a quiet rook move | `fiftyMoveRule` |
+| fifty-move | `'8/8/8/8/8/8/R7/K6k w - - 99 80'` + `a2b2` | `fiftyMoveRule` |
 | insufficient | `'8/8/8/8/8/8/8/K6k w - - 0 1'` | `insufficientMaterial` |
-| max plies | `Referee(start, maxPlies: 4)` + 4 knight shuffles that don't repeat 3× | `maxMoves` |
-| 4-field FEN | `'…/RNBQKBNR w KQkq -'` | constructs fine |
+| max plies | `Referee(start, maxPlies: 4)` + `g1f3 g8f6 f3g1 f6g8` | `maxMoves` |
+| 4-field FEN | `'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -'` | constructs fine, `fen` ends `0 1` |
+| fen output | start, `e2e4` | `fen` ends with `b KQkq e3 0 1` (check the en passant field matches what v1 produces), then after `e7e5 g1f3` the clocks are `1 2` |
 
-**Done when:** all referee tests pass.
+**`test/referee/rules_perft_test.dart`**: perft on the referee's own board, using **all** the depths in
+today's `perft_test.dart` plus these two well-known extra positions:
+| FEN | Depth 1 | 2 | 3 | 4 |
+|---|---|---|---|---|
+| `r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10` | 46 | 2,079 | 89,890 | 3,894,594 |
+| `n1n5/PPPk4/8/8/8/8/4Kppp/5N1N b - - 0 1` (promotions) | 24 | 496 | 9,483 | 182,838 |
+
+If any of these fail, you've found a real rules bug that v1 has too. Fix it in the referee, and note
+it in §11 as a v1 bug for v2.
+
+**Done when:** all referee, SAN and perft tests pass.
+
+### 2.7 `lib/engines/random/random_engine.dart`
+Now that the referee exists: a `ChessEngine` with `id 'random'` that builds `Referee(startFen)`,
+replays `uciMoves` with `tryPlayUci`, and returns a random entry from `legalUciMoves()`. Take an
+optional `int? seed` for `Random(seed)`. Add it to the registry's `_testEngines`. It's used for sanity
+matches (v1 should crush it) and in tests. Also go back to `adapter_test.dart` and add the
+assertion that v1's move is in `Referee(start).legalUciMoves()`.
 
 ---
 
@@ -523,31 +653,68 @@ class OpeningBook {
 }
 ```
 
-Logic for `fromPgnString`:
-1. Normalise line endings (`\r\n` → `\n`).
-2. **Split into games.** A new game starts at a line beginning `[Event ` *or* at the first `[` line
-   after a line of moves. Simplest robust approach: walk the lines, and whenever you see a `[`
-   tag line and the current buffer already contains move text, start a new buffer. If the file has
-   no headers at all, split on blank lines.
-3. For each game text: `final chess = Chess(); final ok = chess.load_pgn(text);`
-   If `!ok`, add a warning (`'Game 37: could not parse'`) and skip it.
-4. If `openingPlies != null`, call `chess.undo()` while `chess.history.length > openingPlies`.
-   If a game is *shorter* than `openingPlies`, warn and use its final position.
-5. If `chess.game_over`, warn and skip it. You can't start from a finished game.
-6. `fen = chess.fen`. **Dedupe** on the first 4 FEN fields and warn about duplicates.
-7. Pick up the name from the headers if you want (optional, for nicer PGN `Event` tags).
+### 3.1b `lib/match_manager/pgn_reader.dart`: your own PGN tokeniser
+```dart
+class PgnGame {
+  final Map<String, String> headers;   // e.g. {'Event': '…', 'FEN': '…'}
+  final List<String> sanMoves;         // just the move tokens, in order
+  final String? result;                // '1-0', '0-1', '1/2-1/2', '*' or null
+  const PgnGame(this.headers, this.sanMoves, this.result);
+}
 
-> `load_pgn` handles one game at a time, which is why you split first. It strips comments `{…}`,
-> variations `(…)`, and move numbers itself.
+class PgnReader {
+  static List<PgnGame> parseMany(String text);
+}
+```
+Algorithm (a small state machine, ~80 lines):
+1. Normalise line endings (`\r\n` → `\n`). Process line by line.
+2. **Header line:** the trimmed line starts with `[` and ends with `]`. Match it with
+   `RegExp(r'^\[(\w+)\s+"(.*)"\]$')`. If the current game already has moves, **finish it first**
+   (this is how games are split). Then store the tag.
+3. **Movetext lines:** scan character by character so you can skip:
+   - `{ … }` comments, which can span lines, so keep an "in comment" flag across lines,
+   - `;` to the end of the line,
+   - `( … )` variations, which **can nest**, so keep a depth counter and only collect tokens at depth 0,
+   - `$12`-style NAGs.
+   Everything else gets split on whitespace into tokens.
+4. **Each token:**
+   - Strip a leading move number with `RegExp(r'^\d+\.+')` (handles `1.`, `1...`, `12.`, and `1.e4` written
+     without a space). Skip it if what's left is empty.
+   - `1-0`, `0-1`, `1/2-1/2` or `*` is the result. **Finish the game.** This is how header-less files are
+     split.
+   - Anything else is a SAN move, so add it to `sanMoves`.
+5. At the end of the file, finish any game that has moves.
 
-### 3.2 Tests (`test/match_manager/opening_book_test.dart`, fixture `test/fixtures/openings_sample.pgn`)
-Put 4 games in the fixture: a headed 8-ply line, a headless line `1. d4 d5 2. c4 e6 *`, a game
-with a `[FEN]` header, and a deliberately broken one (`1. e4 e4`).
+### 3.1c Turning games into positions (`OpeningBook.fromPgnString`)
+1. `games = PgnReader.parseMany(pgn)`.
+2. For each game `g` (index `i`):
+   - `referee = Referee(g.headers['FEN'] ?? startPositionFen)`.
+   - Play `g.sanMoves` in order with `referee.tryPlaySan(token)`. If `openingPlies != null`, stop after that many.
+     If a move fails, add a warning (`'Game ${i+1}, ply ${n+1}: "$token" (reason)'`) and **skip the game**.
+   - If the game is shorter than `openingPlies`, warn and use its final position.
+   - If `referee.checkGameEnd() != null`, warn and skip it. You can't start from a finished game.
+   - `fen = referee.fen`. **Dedupe** on the first 4 FEN fields and warn about duplicates.
+   - The name comes from the `Opening`/`ECO`/`Event` headers (optional, for nicer PGN `Event` tags).
+
+### 3.2 Tests
+**`test/match_manager/pgn_reader_test.dart`**:
+- Two headed games become 2 `PgnGame`s with the correct headers and moves.
+- Header-less `1. e4 e5 2. Nf3 * 1. d4 d5 *` becomes 2 games.
+- `1. e4 {best by test} e5 (1... c5 2. Nf3 (2. c3)) 2. Nf3 $1 ; comment` gives `['e4','e5','Nf3']`.
+  This covers comments, nested variations, NAGs and line comments.
+- `1.e4 e5 2.Nf3 Nc6` (no spaces after the dots) and `3... Nf6` black move numbers parse correctly.
+- A multi-line `{ … }` comment is skipped.
+
+**`test/match_manager/opening_book_test.dart`**, with fixture `test/fixtures/openings_sample.pgn` containing 4
+games: a headed 8-ply line, a headless line `1. d4 d5 2. c4 e6 *`, a game with a `[FEN]` header, and
+a deliberately broken one (`1. e4 e4`).
 - Loads 3 positions with 1 warning.
-- The first FEN equals what you get by playing the same moves in `Chess()` by hand.
-- `openingPlies: 2` on the headed game gives the FEN after `1. e4 e5` (or whatever it starts with).
+- The first FEN equals what you get by playing the same moves as UCI into a `Referee` by hand.
+- `openingPlies: 2` on the headed game gives the FEN after its first two plies.
 - A duplicate game produces a duplicate warning and isn't added twice.
 - Load your real `match_data/openings.pgn` and print the count and warnings (a "smoke test", not a strict assertion).
+  **Every warning here is either a quirk of your file or a bug in your PGN reader / SAN parser.
+  Investigate each one.**
 
 **Done when:** your real file loads with a sensible count and you understand every warning.
 
@@ -789,8 +956,9 @@ Details that are easy to get wrong:
   pawns (`eval/100`, 2 dp, explicit `+`). Leave out the parts that are null.
 - For `illegalMove`/`engineError`, add a final comment before the result: `{v2 played "e2e5" (illegal) — forfeit}`.
 - Wrap lines at ~80 characters. Separate games with a blank line. Use `\n` line endings.
-- **Validate the output:** in a test, feed `gameToPgn(...)` back into `Chess().load_pgn(...)` and check
-  it returns `true` with the same final FEN. Also paste a real game into Lichess's "Import game" once.
+- **Validate the output:** in a test, feed `gameToPgn(...)` back through your own `PgnReader.parseMany`
+  plus `Referee.tryPlaySan` (or just `OpeningBook.fromPgnString`) and check you reach the same final FEN.
+  Also paste a real game into Lichess's "Import game" once, as an outside check that your SAN is standard.
 
 ### 6.2 `lib/match_manager/match_output.dart`
 Creates `match_results/<yyyy-MM-dd_HHmm>_<A>-vs-<B>/` containing:
@@ -899,10 +1067,9 @@ Methods (keep the public names the GUI already uses where you can):
 - `reset()` creates a new `Referee`, calls `_engine.newGame()`, and clears the selection.
 - `List<String> get engineIds => EngineRegistry.versionIds;` and `String get engineId`.
 - `Future<void> setEngine(String id)` creates `EngineRegistry.create(id)`, calls `reset()`, and calls `notifyListeners()`.
-- `int pieceAt(int index)` converts `_referee`'s piece on `squareName(index)` to the **old int piece code**
-  (`Piece.white|Piece.pawn`, etc.) so `PieceImage.forPiece` and `square.dart` keep working. Put the mapping
-  in a small UI helper, because the old `Piece` constants have to live somewhere outside `lib/chess_engine` once that's deleted.
-  Moving `Piece` constants + `PieceImage` into `lib/components/piece_codes.dart` is fine.
+- `int pieceAt(int index) => _referee.pieceAt(index);` The referee's rules core uses the same int piece
+  codes as today, so `PieceImage.forPiece` and `square.dart` keep working. Just switch `PieceImage`'s import
+  of `Piece` to `package:ace/referee/rules/core/piece.dart`.
 - `List<int> legalTargetsFrom(int index)`: from `_referee.legalUciMoves()`, keep those starting at
   `squareName(index)` and map the target to an index.
 - `bool get whiteToPlay => _referee.whiteToMove;`
@@ -936,7 +1103,7 @@ Methods (keep the public names the GUI already uses where you can):
 ### 9.3 Clean-up
 - Delete `lib/chess_engine/` and `lib/tests/tests.dart` (and the GUI's import of it).
 - Delete `test/perft_test.dart` (now covered by `perft_all_versions_test.dart`).
-- `Zobrist()` in `GameProvider` is gone, because each adapter initialises its own.
+- `Zobrist()` in `GameProvider` is gone, because each adapter and the referee initialise their own.
 - Run `flutter analyze` and `flutter test`. Then run the app on your phone: play a game against v1,
   check castling, en passant, promotion, and that a mate shows the result.
 
@@ -1025,13 +1192,13 @@ new version is better by ≥ X Elo (or not). It typically stops after 100–500 
 
 ## 13. Master checklist
 
-- [ ] **P0**: baseline green, `getImg` moved out of `Piece`, `chess` + `args` added, `match_results/` git-ignored, openings copied in
-- [ ] **P1**: `engine_interface.dart`, `tool/snapshot_engine.dart`, `lib/engines/v1/` + `adapter.dart`, `RandomEngine`, `EngineRegistry`, plus adapter/perft/purity tests
-- [ ] **P2**: `Referee` + `GameEnd`, plus referee tests (all 14 rows)
-- [ ] **P3**: `OpeningBook`, plus fixture tests. Your real file loads cleanly
+- [ ] **P0**: baseline green, `getImg` moved out of `Piece`, `args` added, `match_results/` git-ignored, openings copied in
+- [ ] **P1**: `engine_interface.dart`, `tool/snapshot_engine.dart`, `lib/engines/v1/` + `adapter.dart`, `EngineRegistry`, plus adapter/perft/purity tests
+- [ ] **P2**: `lib/referee/rules/` copy + R1/R2 fixes, `San`, `Referee`, `GameEnd`, `RandomEngine`, plus SAN (incl. round trip), referee and rules perft tests
+- [ ] **P3**: `PgnReader`, `OpeningBook`, plus tests. Your real file loads cleanly
 - [ ] **P4**: `GameRecord`, `GameRunner`, fake engines, plus game tests
 - [ ] **P5**: `MatchConfig`, `MatchRunner`, `elo.dart`, `MatchStats`, plus tests (Elo table)
-- [ ] **P6**: `PgnWriter`, `MatchOutput`. PGN round-trips through `load_pgn` and imports into Lichess
+- [ ] **P6**: `PgnWriter`, `MatchOutput`. PGN round-trips through your own `PgnReader` and imports into Lichess
 - [ ] **P7**: `bin/match.dart` with progress, ETA and Ctrl-C handling. AOT build works
 - [ ] **P8**: v1 vs random ≈ 100%, v1 vs v1 ≈ 0 Elo with zero errors
 - [ ] **P9**: app uses Referee + ChessEngine, version dropdown works on the phone, `lib/chess_engine` deleted
