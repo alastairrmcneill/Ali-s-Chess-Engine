@@ -324,6 +324,10 @@ Helpers in the same file (they're adapter code, so they don't count as editing v
    think every position was a threefold repetition. Each snapshot is a separate library with its own
    statics, so **each adapter initialises its own copy, once**. Don't call `Zobrist()` again later:
    it re-randomises the tables.
+   *This only applies to versions that use Zobrist.* The match manager, the referee and the
+   `ChessEngine` interface never use or require it. It's an internal detail of an engine. A version
+   without Zobrist simply has no `Zobrist()` call in its adapter (see "Removing Zobrist from a
+   version" in Phase 10).
 2. **`print` spam.** `runZoned` with a `print` override swallows v1's output without touching v1's
    code. It also gives us search depth for free.
 3. **Build a fresh `Board` every move.** It's cheap (replaying ≤ 600 moves) and means nothing leaks
@@ -1122,6 +1126,23 @@ Methods (keep the public names the GUI already uses where you can):
 7. Full run: `--a v2 --b v1 --games 1000 --movetime 100`.
 8. Write the result down. A `match_results/README.md` or a table in the main README works:
    `v2 vs v1: +43.7 ± 18.6 (1000 games, 100ms)`.
+
+### Example experiment: removing Zobrist hashing from a version
+No engine has to use Zobrist. Only strings cross the interface. If you want a version without it
+(e.g. `v3 = v2 − Zobrist`, a good experiment to measure what hashing is worth), remember what
+depends on it inside the snapshot:
+
+| Inside the engine | Uses Zobrist for | Without Zobrist |
+|---|---|---|
+| `Board.makeMove/unMakeMove` | updating `zobristKey` incrementally | delete those lines and the `zobristKey` field |
+| `Board.hashHistory` (repetition) | counting how often a position occurred | Key by something else, e.g. the first 4 FEN fields (slow in search) or a list of piece arrays plus side/castling/ep compared on demand. **Or drop repetition detection.** Then the engine can't see draws coming, so it may walk into repetitions when winning and miss saving ones when losing. The referee still enforces the draw |
+| `TranspositionTable` | keying entries | remove the TT (and the `entry` lookups/stores in `search`), or key it some other way |
+| `MoveOrdering` (if it reads the TT best move) | ordering the TT move first | just use the previous iteration's best move |
+| `adapter.dart` | the `Zobrist()` init call | delete it |
+
+Then run the usual checks: perft (all of the above can break `unMakeMove` if done carelessly),
+the purity test, a quick 100-game run, then the full match. Expect it to be **weaker**. The TT is a
+big speed-up for iterative deepening. That's fine: the match tells you exactly how much weaker.
 
 From then on: **one idea per version** (e.g. v3 = v2 + killer moves). Then you'll know which change
 caused the gain or loss.
