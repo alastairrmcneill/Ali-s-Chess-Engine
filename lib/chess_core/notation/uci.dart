@@ -13,7 +13,10 @@ class UciMove {
 
   factory UciMove.parse(String uci) {
     if (uci.length != 4 && uci.length != 5) throw FormatException("Invalid UCI move", uci);
-    if (!"abcdefgh".contains(uci[0]) || !"12345678".contains(uci[1]) || !"abcdefgh".contains(uci[2]) || !"12345678".contains(uci[3])) {
+    if (!"abcdefgh".contains(uci[0]) ||
+        !"12345678".contains(uci[1]) ||
+        !"abcdefgh".contains(uci[2]) ||
+        !"12345678".contains(uci[3])) {
       throw FormatException("Invalid square in UCI move", uci);
     }
     String? promotion = uci.length == 5 ? uci[4].toLowerCase() : null;

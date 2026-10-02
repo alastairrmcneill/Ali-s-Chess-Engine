@@ -12,7 +12,10 @@ import 'package:flutter_test/flutter_test.dart';
 Move _findMove(List<Move> legal, String uci) {
   final parsed = UciMove.parse(uci);
   return legal.firstWhere(
-    (m) => m.startingSquare == parsed.from && m.targetSquare == parsed.to && (m.promotion == 0 ? null : ' qnrb'[m.promotion]) == parsed.promotion,
+    (m) =>
+        m.startingSquare == parsed.from &&
+        m.targetSquare == parsed.to &&
+        (m.promotion == 0 ? null : ' qnrb'[m.promotion]) == parsed.promotion,
   );
 }
 
