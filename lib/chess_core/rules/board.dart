@@ -1,10 +1,10 @@
 import 'dart:collection';
 
-import 'package:ace/referee/rules/fen.dart';
-import 'package:ace/engines/v1/core/game_state.dart';
-import 'package:ace/engines/v1/core/move.dart';
-import 'package:ace/engines/v1/core/piece.dart';
-import 'package:ace/referee/rules/zobrist.dart';
+import 'package:ace/chess_core/notation/fen.dart';
+import 'package:ace/chess_core/notation/piece.dart';
+import 'package:ace/chess_core/rules/game_state.dart';
+import 'package:ace/chess_core/rules/move.dart';
+import 'package:ace/chess_core/rules/zobrist.dart';
 
 class Board {
   late List<int> position;

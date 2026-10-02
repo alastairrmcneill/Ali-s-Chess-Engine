@@ -67,6 +67,13 @@ class Piece {
     return (pieceType == queen || pieceType == rook);
   }
 
+  static const String _fenLetters = " kpnbrq";
+
+  static String toFenChar(int piece) {
+    String letter = _fenLetters[type(piece)];
+    return isColor(piece, white) ? letter.toUpperCase() : letter;
+  }
+
   static String print(int piece) {
     String string = "";
     switch (type(piece)) {

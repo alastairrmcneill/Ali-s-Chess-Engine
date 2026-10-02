@@ -3,7 +3,7 @@
 import 'package:ace/engines/v1/core/move.dart';
 import 'package:ace/engines/v1/core/piece.dart';
 import 'package:ace/components/square.dart';
-import 'package:ace/referee/rules/board_helper.dart';
+import 'package:ace/chess_core/notation/board_helper.dart';
 import 'package:ace/providers/game_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';

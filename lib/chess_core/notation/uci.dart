@@ -1,4 +1,4 @@
-import 'package:ace/referee/rules/board_helper.dart';
+import 'package:ace/chess_core/notation/board_helper.dart';
 
 class UciMove {
   final int from;

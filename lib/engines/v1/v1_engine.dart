@@ -1,4 +1,4 @@
-import 'package:ace/referee/rules/uci.dart';
+import 'package:ace/chess_core/notation/uci.dart';
 import 'package:ace/engines/engine_interface.dart';
 import 'package:ace/engines/v1/core/move.dart';
 import 'package:ace/engines/v1/ai/engine.dart';

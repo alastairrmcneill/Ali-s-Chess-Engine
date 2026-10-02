@@ -12,19 +12,20 @@ phases in order. Each one builds on the last and ends with something you can run
 
 ## 0. Decisions (from our Q&A)
 
-| Topic                  | Decision                                                                                                                                                   |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Where matches run      | **Command line only** (`dart run bin/match.dart …`) on your laptop                                                                                         |
-| App                    | Player can **choose which engine version** to play against                                                                                                 |
-| Versioning             | **Snapshot folders**: `lib/engines/v1/`, `lib/engines/v2/`, … Each one is fully self-contained and frozen once superseded                                  |
-| Engine protocol        | In-process Dart interface that only speaks **strings**: start FEN + list of UCI moves in, UCI move out                                                     |
-| Time control           | **Fixed time per move**, set per match with `--movetime`                                                                                                   |
-| Openings               | **Your existing PGN file**, read by your own PGN/SAN parser. Each position is played **twice with colours swapped**                                        |
-| Third-party chess code | **None.** The referee, SAN and PGN handling are all written by you (only `args` is used, for CLI flags)                                                    |
-| Match size             | **Fixed 1000 games, run in series** (parallel play is a side note at the end)                                                                              |
-| Termination            | Normal chess rules, plus **illegal move / crash / no move = loss (logged)**, plus **draw after 300 moves** (600 plies)                                     |
-| Output                 | W/D/L, Elo ± error, score by colour, PGN of every game, average depth/nodes/time per engine, termination breakdown, error log                              |
-| Bug fixes              | **v1 is frozen exactly as it is today** (a true baseline). The known bugs are listed in §11 and fixing them is **v2**, which is your first real experiment |
+| Topic                  | Decision                                                                                                                                                                                                                                     |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Where matches run      | **Command line only** (`dart run bin/match.dart …`) on your laptop                                                                                                                                                                           |
+| App                    | Player can **choose which engine version** to play against                                                                                                                                                                                   |
+| Versioning             | **Snapshot folders**: `lib/engines/v1/`, `lib/engines/v2/`, … Each owns its board, move generator, search and eval, and is frozen once superseded                                                                                            |
+| Shared code            | **`lib/chess_core/notation/`** (piece codes, square names, FEN, UCI) is shared by every engine and the referee. **`lib/chess_core/rules/`** is the referee's own rules core, and engines never import it                                     |
+| Engine protocol        | In-process Dart interface that only speaks **strings**: start FEN + list of UCI moves in, UCI move out                                                                                                                                       |
+| Time control           | **Fixed time per move**, set per match with `--movetime`                                                                                                                                                                                     |
+| Openings               | **Your existing PGN file**, read by your own PGN/SAN parser. Each position is played **twice with colours swapped**                                                                                                                          |
+| Third-party chess code | **None.** `chess_core`, the referee, SAN and PGN handling are all written by you (only `args` is used, for CLI flags)                                                                                                                        |
+| Match size             | **Fixed 1000 games, run in series** (parallel play is a side note at the end)                                                                                                                                                                |
+| Termination            | Normal chess rules, plus **illegal move / crash / no move = loss (logged)**, plus **draw after 300 moves** (600 plies)                                                                                                                       |
+| Output                 | W/D/L, Elo ± error, score by colour, PGN of every game, average depth/nodes/time per engine, termination breakdown, error log                                                                                                                |
+| Bug fixes              | **v1's search, eval, board and move generator are frozen as they are today** (a true baseline). FEN loading now comes from shared `chess_core`, which fixes B7 for every version. The other bugs are listed in §11 and fixing them is **v2** |
 
 ---
 
@@ -46,24 +47,26 @@ phases in order. Each one builds on the last and ends with something you can run
                                                          │              ──► PgnWriter  (games.pgn)
                                                          │              ──► error log
                                                          ▼
-                ChessEngine (interface)  ◄── implemented by ──  lib/engines/v1/adapter.dart  (wraps frozen v1)
-                                                                lib/engines/v2/adapter.dart  (wraps v2)
+                ChessEngine (interface)  ◄── implemented by ──  lib/engines/v1/v1_engine.dart (wraps frozen v1)
+                                                                lib/engines/v2/v2_engine.dart (wraps v2)
                                                                 lib/engines/random/…         (sanity checks)
 
-                Referee (lib/referee/): the neutral judge, built from YOUR code: a frozen, perft-tested copy of
-                the rules core + your own game-end and SAN logic. It is used by the match manager AND by the app,
-                so neither depends on any engine version's code. No third-party chess packages.
+                lib/chess_core/  (all your code, no packages)
+                  notation/  piece codes, squares, FEN, UCI  ◄── SHARED: imported by every engine + everything else
+                  rules/     the referee's own board + move generator (perft-tested copy). Engines never import it
+                  referee.dart, san.dart, game_end.dart: the neutral judge, used by the match manager AND the app
 ```
 
 ### Three rules that keep this sane
 
-1. **A snapshot folder only imports `dart:*` and files inside its own folder.** The one exception is
-   `adapter.dart`, which may also import `lib/engines/engine_interface.dart`. A test enforces this
-   (Phase 1).
+1. **A snapshot folder only imports `dart:*`, files inside its own folder, and `chess_core/notation/`.**
+   The adapter may also import `lib/engines/engine_interface.dart`. A test enforces this (Phase 1).
+   Snapshots never import another version, and never import `chess_core/rules/` or the referee.
 2. **Nothing outside a snapshot ever touches its `Board`/`Move` types.** Everything crosses the
-   boundary as strings (FEN and UCI like `e2e4`, `e7e8q`, `e1g1`).
-3. **The referee is separate from every engine.** It has its own frozen copy of the rules code that
-   no engine version touches. If `v2`'s move generator gets a bug, the referee catches it as an
+   boundary as strings (FEN and UCI like `e2e4`, `e7e8q`, `e1g1`). Inside, an engine may use the shared
+   `FenPosition`/`UciMove` parsers to read those strings, then map them into its own types.
+3. **The referee is separate from every engine.** It has its own rules core (`chess_core/rules/`) that
+   no engine version imports, and `chess_core` never imports an engine. If `v2`'s move generator gets a bug, the referee catches it as an
    illegal move. If the referee used v2's code, both would agree on the wrong answer.
 
 ### Target folder layout (when everything is done)
@@ -82,11 +85,12 @@ lib/
     engine_registry.dart             # 'v1' → factory, 'v2' → factory, 'random' → factory
     random/random_engine.dart        # plays random legal moves (sanity baseline)
     v1/
-      adapter.dart                   # AceEngine implements ChessEngine
-      ai/ core/ helpers/ extensions/ # frozen copy of today's lib/chess_engine + lib/extensions
+      v1_engine.dart                 # V1Engine implements ChessEngine (the adapter)
+      ai/ core/                      # frozen copy of today's search/eval + board/move gen (FEN via chess_core)
     v2/ …                            # same shape
-  referee/
-    rules/                           # frozen copy of the rules core (core/ helpers/ extensions/, no ai/)
+  chess_core/
+    notation/                        # SHARED with engines: piece.dart, board_helper.dart, fen.dart, uci.dart
+    rules/                           # referee-only rules core: board, move, move_generator, precompute_data, game_state, zobrist
     referee.dart                     # Referee class
     san.dart                         # SAN writer + parser (for PGN in and out)
     game_end.dart                    # GameTermination enum, GameOutcome enum, GameEnd class
@@ -105,7 +109,7 @@ lib/
     GUI.dart  square.dart  piece_image.dart   # piece_image.dart is new (Phase 0)
   providers/game_provider.dart       # rewritten in Phase 9 to use Referee + ChessEngine
 test/
-  engines/  referee/  match_manager/  helpers/fake_engines.dart  fixtures/openings_sample.pgn
+  engines/  chess_core/  match_manager/  helpers/fake_engines.dart  fixtures/openings_sample.pgn
 ```
 
 `lib/chess_engine/` and `lib/tests/` are deleted at the end of Phase 9, once the app no longer uses them.
@@ -162,7 +166,7 @@ Then run `flutter pub get`. **No chess packages.** Rules, SAN and PGN are all yo
 ### 0.4 Housekeeping
 
 - [ ] Add `match_results/` to `.gitignore`.
-- [ ] Create empty folders `bin/ tool/ match_data/ lib/engines/ lib/referee/ lib/match_manager/`.
+- [ ] Create empty folders `bin/ tool/ match_data/ lib/engines/ lib/chess_core/ lib/match_manager/`.
 - [ ] Copy your opening PGN into `match_data/openings.pgn`.
 
 **Done when:** the app runs, `flutter test` passes, and `grep -r "package:flutter" lib/chess_engine` returns nothing.
@@ -230,23 +234,25 @@ Logic:
 1. Resolve the source dir (`lib/chess_engine` or `lib/engines/<from>`) and the destination
    `lib/engines/<to>`. **Refuse** if the destination exists.
 2. Recursively copy every `.dart` file.
-3. For the first snapshot only, also copy `lib/extensions/` into `lib/engines/v1/extensions/`,
-   because `fen_utility.dart` uses `string_extension.dart`.
-4. In every copied file, rewrite imports with plain string replacement:
-   - `package:ace/chess_engine/` → `package:ace/engines/<to>/`
-   - `package:ace/extensions/` → `package:ace/engines/<to>/extensions/`
+3. In every copied file, rewrite imports with plain string replacement:
    - `package:ace/engines/<from>/` → `package:ace/engines/<to>/`
+   - (first snapshot only) `package:ace/chess_engine/` → `package:ace/engines/<to>/`
+   - Leave `package:ace/chess_core/notation/…` imports **unchanged**. They're shared on purpose.
+4. Rename the adapter: `v1_engine.dart` → `v2_engine.dart`, `V1Engine` → `V2Engine`, and the `id`/`displayName`.
 5. Print a summary: N files copied, M imports rewritten.
 
 Use `dart:io` (`Directory.list(recursive: true)`, `File.readAsString`, `File.writeAsString`).
 About 60 lines.
 
-When copying v1→v2 the adapter comes along too. Only its `id`/`displayName` need changing.
+Then add the new version to the registry by hand (or have the tool print the line to paste).
 
-### 1.3 `lib/engines/v1/adapter.dart`
+### 1.3 `lib/engines/v1/v1_engine.dart` (the adapter)
 
-This is the most important file in the phase. It wraps the frozen v1 code **without
-editing it**.
+This is the most important file in the phase. It wraps the frozen v1 search **without
+editing it**. The only non-import change to v1 itself: `Board.fromFEN` reads FENs through the shared
+`FenPosition.parse` (from `chess_core/notation/fen.dart`), and v1's old `helpers/fen_utility.dart` +
+`loaded_position.dart` are deleted. v1's other files may import `chess_core/notation/board_helper.dart`
+in place of their old `helpers/board_helper.dart`, because it's the same code.
 
 ```dart
 import 'dart:async';
@@ -256,15 +262,16 @@ import 'package:ace/engines/v1/core/board.dart';
 import 'package:ace/engines/v1/core/move.dart';
 import 'package:ace/engines/v1/core/move_generator.dart';
 import 'package:ace/engines/v1/core/zobrist.dart';
+import 'package:ace/chess_core/notation/uci.dart';
 
-class AceEngine implements ChessEngine {
+class V1Engine implements ChessEngine {
   @override String get id => 'v1';
   @override String get displayName => 'ACE v1';
 
   static bool _zobristReady = false;
   late Engine _engine;
 
-  AceEngine() { _initZobrist(); _engine = Engine(); }
+  V1Engine() { _initZobrist(); _engine = Engine(); }
 
   static void _initZobrist() {
     if (_zobristReady) return;
@@ -315,15 +322,16 @@ class AceEngine implements ChessEngine {
 }
 ```
 
-Helpers in the same file (they're adapter code, so they don't count as editing v1):
+Helpers in the same file (they're adapter code, so they don't count as editing v1). They're the
+**v1-specific mapping** between the shared `UciMove` and v1's own `Move`:
 
-- `String squareName(int index)`: v1 uses index 0 = a8, 7 = h8, 56 = a1, 63 = h1.
-  `file = index % 8`, `rank = 8 - index ~/ 8`, giving `'abcdefgh'[file] + '$rank'`.
-- `String toUci(Move m)` (private to this adapter, because it depends on v1's `Move` class): `squareName(m.startingSquare) + squareName(m.targetSquare)`, plus a
-  promotion suffix from `m.promotion`: `1→'q'`, `2→'n'`, `3→'r'`, `4→'b'` (see
-  `Move.promotingPiece()`). **Don't use `Move.toChessNotation()`. It drops the promotion piece
-  (bug B1).** Castling is the king's move (`e1g1`), which is what v1 already generates.
+- `String toUci(Move m)`: `UciMove(from: m.startingSquare, to: m.targetSquare, promotion: m.promotion == 0 ? null : ' qnrb'[m.promotion]).toString()`.
+  v1's promotion codes are `1→'q'`, `2→'n'`, `3→'r'`, `4→'b'` (see `Move.promotingPiece()`). **Don't use
+  `Move.toChessNotation()`. It drops the promotion piece (bug B1).** Castling is the king's move
+  (`e1g1`), which is what v1 already generates. The square numbering (a8 = 0) happens to match `chess_core`'s.
+  A future version with different numbering converts it here.
 - `Move? _findMove(List<Move> legal, String uci)`: return the first `m` where `toUci(m) == uci`.
+  Matching against v1's own legal list also checks that v1 agrees the move is legal.
 
 #### ⚠️ Gotchas the adapter handles (read these)
 
@@ -354,14 +362,14 @@ out until then.
 ```dart
 import 'package:ace/engines/engine_interface.dart';
 import 'package:ace/engines/random/random_engine.dart';
-import 'package:ace/engines/v1/adapter.dart' as v1;
-// import 'package:ace/engines/v2/adapter.dart' as v2;
+import 'package:ace/engines/v1/v1_engine.dart';
+// import 'package:ace/engines/v2/v2_engine.dart';
 
 class EngineRegistry {
   /// Ordered oldest → newest. Add a line per new version.
   static final Map<String, ChessEngine Function()> _factories = {
-    'v1': () => v1.AceEngine(),
-    // 'v2': () => v2.AceEngine(),
+    'v1': () => V1Engine(),
+    // 'v2': () => V2Engine(),
   };
   static final Map<String, ChessEngine Function()> _testEngines = {
     // 'random': () => RandomEngine(),   // added in Phase 2.7
@@ -378,7 +386,7 @@ class EngineRegistry {
 }
 ```
 
-Prefixed imports (`as v1`) mean every adapter can use the same class name, `AceEngine`.
+Each adapter has its own class name (`V1Engine`, `V2Engine`…). If you'd rather name them all `AceEngine`, import them with prefixes (`as v1`).
 
 ### 1.6 Tests (`test/engines/`)
 
@@ -396,58 +404,95 @@ Prefixed imports (`as v1`) mean every adapter can use the same class name, `AceE
 - `perft_all_versions_test.dart`: move the 5 cases from `test/perft_test.dart` here and run them
   against `EngineRegistry.create(id).perft(...)` for every version. Cap depth so it runs in < 1 min.
 - `snapshot_purity_test.dart`: for each `lib/engines/v*/` folder, read every `.dart` file and
-  assert every `import` is `dart:…` or `package:ace/engines/<sameVersion>/…`. The only exception
-  is `adapter.dart`, which may also import `package:ace/engines/engine_interface.dart`. This
-  stops you from accidentally coupling v3 to v2's code.
+  assert every `import` is one of:
+  - `dart:…`
+  - `package:ace/engines/<sameVersion>/…`
+  - `package:ace/chess_core/notation/…` (the shared standards code, **not** `chess_core/rules/`
+    or anything else in `chess_core`)
+  - the adapter may also import `package:ace/engines/engine_interface.dart`.
 
-**Done when:** `lib/engines/v1/` exists, it's byte-identical to `lib/chess_engine/` apart from import
-paths (check with `diff -r`), and all the tests above pass. Leave `lib/chess_engine/` in place for
+  This stops you accidentally coupling v3 to v2's code, or an engine to the referee's rules.
+
+**Done when:** `lib/engines/v1/` exists, and it's identical to `lib/chess_engine/` apart from import
+paths and `Board.fromFEN` now using `FenPosition` (check with `diff -r`). `ai/` should differ only in
+imports. All the tests above pass. Leave `lib/chess_engine/` in place for
 now because the app still uses it until Phase 9.
 
 ---
 
-## Phase 2: The referee (your own rules code, no packages)
+## Phase 2: `chess_core`: shared notation, rules core and referee (no packages)
 
-The referee is the neutral judge. It's used by the match manager now and by the app in Phase 9. It's
-built from **your own code** in two parts:
+`lib/chess_core/` is all **your own code**, and it's maintained: you can fix bugs in it. It has
+three parts:
 
-1. **A rules core:** a separate, frozen copy of today's board / move generator / FEN code in
-   `lib/referee/rules/`. It already passes perft, so it's a proven move generator.
-2. **Three things you write fresh:** UCI move matching, game-end detection, and SAN (the `Nf3` /
-   `exd5` notation that PGN files use).
+| Folder                 | What                                                                                       | Who may import it                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `chess_core/notation/` | **The chess standards:** piece codes, square names, FEN parse/write, UCI parse/write       | **Everyone**: engines (all versions), the referee, the match manager, the app |
+| `chess_core/rules/`    | **The rules core:** a board + move generator copied from today's code, used to judge games | **Only `chess_core` itself** (the referee, SAN). **Never engines**            |
+| `chess_core/*.dart`    | `game_end.dart`, `san.dart`, `referee.dart`                                                | match manager + app                                                           |
 
-> **The trade-off, honestly.** The rules core starts from the same code as v1. So any rules bug
-> v1 has _today_, the referee has too, and it won't catch v1 making that mistake. It **will** catch
-> every _new_ bug you introduce in v2, v3… (a bitboard rewrite, a faster move generator, a changed
+**Why this split?** FEN and UCI are standards. There's exactly one correct way to read `e7e8q` or a
+FEN, so writing them once and sharing them is sensible. Board representation, move generation, search
+and eval belong to each engine version. They're what you're experimenting with. The referee keeps its
+own rules core, so it stays an independent judge.
+
+> **The shared-code contract (important).** Every engine version imports `chess_core/notation/`,
+> **including frozen ones.** So changing `notation/` changes v1, v2, v3… all at once. To keep old
+> results meaningful:
+>
+> - `notation/` only contains standards code (piece codes, squares, FEN, UCI). Nothing engine-specific
+>   and nothing that "makes the engine better".
+> - Change it **only to fix a real bug**, with a test for the bug.
+> - After any change: run **every** version's adapter + perft tests. If the fix could change how an old
+>   version plays (e.g. FEN clocks), note it in §11 and rerun your baseline match before comparing new results.
+> - `notation/` must be self-contained: it imports only `dart:*` and other `notation/` files (not
+>   `lib/extensions/`, so inline `isNumeric`/`isUpperCase`, or move them into `notation/`).
+
+> **The referee trade-off, honestly.** `chess_core/rules/` starts from the same code as v1. So any
+> rules bug v1 has _today_, the referee has too, and it won't catch v1 making that mistake. It **will**
+> catch every _new_ bug you introduce in v2, v3… (a bitboard rewrite, a faster move generator, a changed
 > `makeMove`), which is the real risk from here on. Two habits keep it trustworthy:
 >
 > - The perft suite in 2.6 is stronger than today's. Perft is the best proof a move generator is
 >   correct.
-> - **Never edit `lib/referee/rules/` to make an engine pass.** Only fix genuine rules bugs, and add
+> - **Never edit `chess_core/rules/` to make an engine pass.** Only fix genuine rules bugs, and add
 >   a test with each fix.
 
-### 2.1 Create the rules core
+### 2.1 Create `chess_core`
 
-Copy `core/`, `helpers/` and `extensions/` (**not** `ai/`) from `lib/chess_engine/` into
-`lib/referee/rules/`, rewriting imports to `package:ace/referee/rules/…`. The easiest way is to give
-`tool/snapshot_engine.dart` a `--dest <path>` option and a `--no-ai` flag. Doing it by hand once is
-also fine (it's about 10 files).
+**Step A, `notation/` (shared):**
 
-Then make these **referee-only fixes** inside `lib/referee/rules/`. They're allowed because the
-referee isn't an engine being measured.
+| File                         | Contents                                                                                                                                                                                                                           |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `notation/piece.dart`        | The `Piece` constants and helpers (`none/king/pawn/…`, `white = 0`, `black = 8`, `type()`, `color()`, `isColor()`), copied from today's `piece.dart`. These are the **neutral piece codes** used by `FenPosition` and the app's UI |
+| `notation/board_helper.dart` | `getFileFromIndex`, `getRankFromIndex`, `squareName(int)`, `squareIndex(String)` (a8 = 0 … h1 = 63)                                                                                                                                |
+| `notation/fen.dart`          | `FenPosition` (what you have now): `parse(String)` (tolerates 4-field FENs, reads the half-move clock and full-move number, parses en passant), **plus** `String toFen()`, which writes all 6 fields                               |
+| `notation/uci.dart`          | `UciMove` (what you have now): `parse` (throws `FormatException` on bad input) and `toString()`                                                                                                                                    |
 
-| #   | File                                             | Change                                                                                                                                                                                               | Why                                                                        |
-| --- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| R1  | `helpers/fen_utility.dart` `loadPositionFromFEN` | Tolerate FENs with 4 fields (default half-move `0`, full-move `1`). Store the half-move clock under a correctly named field, `halfMoveClock`, instead of `plyCount`. Also parse the full-move number | Opening FENs vary. Today a 4-field FEN crashes on `sections[4]`            |
-| R2  | `core/board.dart` `Board.fromFEN`                | `fiftyMoveRule = loadedPositionInfo.halfMoveClock;`                                                                                                                                                  | Otherwise the fifty-move rule is wrong for positions that don't start at 0 |
-| R3  | `helpers/board_helper.dart`                      | Add `squareName(int)` and `squareIndex(String)` (see 2.3)                                                                                                                                            | Index ⇄ `"e4"` conversion for UCI, used by the referee and the app         |
+**Step B, `rules/` (referee only):** copy `board.dart`, `move.dart`, `move_generator.dart`,
+`precompute_data.dart`, `game_state.dart` and `zobrist.dart` from v1's `core/` into
+`chess_core/rules/`. Then:
 
-Don't touch `makeMove`/`unMakeMove`/the move generator.
+- Point **every** import at `chess_core/rules/…` or `chess_core/notation/…`. **No `package:ace/engines/` imports, ever.**
+  (Today the referee's board imports v1's `game_state`, `move` and `piece`. That's what this step fixes.)
+- `Board.fromFEN` uses `FenPosition.parse` (as you have it) and also adds the start position to
+  `hashHistory`.
+- `Board` also keeps `fullMoveNumber` up to date: increment it in `makeMove` after Black moves, and
+  restore it in `unMakeMove` (store it in `GameState`). Or drop the field and let the `Referee` track it
+  (2.5). Either way, don't leave a `plyCount` that's set once and never updated.
+- Add `FenPosition toFenPosition()` on the rules `Board` so the referee can call `.toFen()`.
+- Don't touch `makeMove`'s move logic or the move generator.
 
-The `snapshot_purity_test.dart` from Phase 1 should also cover `lib/referee/rules/`: it may only
-import `dart:*` and itself.
+**Step C, delete `lib/referee/`.** Move `game_end.dart` to `chess_core/game_end.dart`. Move tests to
+`test/chess_core/` (including `uci_test.dart` and `board_helper_test.dart`).
 
-### 2.2 `lib/referee/game_end.dart`
+**Step D, a purity test for `chess_core`** (`test/chess_core/core_purity_test.dart`):
+
+- Files in `chess_core/notation/` may import only `dart:*` and `package:ace/chess_core/notation/…`.
+- Files anywhere in `chess_core/` may import only `dart:*` and `package:ace/chess_core/…`. That
+  means no engines, no `flutter`, and no `lib/extensions/`.
+
+### 2.2 `lib/chess_core/game_end.dart`
 
 ```dart
 enum GameOutcome { whiteWins, blackWins, draw }
@@ -468,29 +513,21 @@ class GameEnd {
 }
 ```
 
-### 2.3 Square-name helpers: in the referee's `BoardHelper`
+### 2.3 Where UCI conversion lives
 
-There's no separate utils file. Add two static methods to the referee's copy of
-`lib/referee/rules/helpers/board_helper.dart` (next to `getFileFromIndex`/`getRankFromIndex`):
+Parsing and printing the **string** is shared: `UciMove.parse('e7e8q')` gives `(from, to, promotion)`, and
+`UciMove(...).toString()` gives the string back. Both live in `notation/uci.dart`.
 
-- `static String squareName(int index)`: a8 = 0 … h1 = 63, so `'abcdefgh'[getFileFromIndex(index)] + '${8 - getRankFromIndex(index)}'`.
-- `static int squareIndex(String name)`: the inverse, `(8 - rank) * 8 + file`.
+Turning a `UciMove` into a **`Move` object** is not shared, because every codebase has its own `Move`:
 
-These are additions, not rules changes, so they're fine in the frozen rules copy (see R3 in 2.1).
-The referee and the app (Phase 9) use `BoardHelper.squareName`/`squareIndex`. The v1 adapter keeps its
-own private copy, because snapshots can't import outside themselves.
+- **Each engine** maps `UciMove` to _its_ `Move` in its adapter (Phase 1.3). v1 does it by matching
+  against its own legal move list. A future bitboard version with packed 16-bit moves writes its own
+  mapping.
+- **The referee** maps `UciMove` to the _rules_ `Move` in `referee.dart`.
 
-> **Where's `toUci`?** Converting a `Move` to UCI depends on how that `Move` is represented, and
-> that's private to each codebase. So there's **no shared `toUci`**. Each side owns its own:
->
-> - **Each engine's adapter** has a private `toUci`/`_findMove` for _its_ `Move` type (Phase 1.3).
->   A future v5 with bitboards and 16-bit packed moves writes a different one in its own adapter.
-> - **The referee** has a private `_toUci` in `referee.dart` for the _referee's_ `Move`
->   (`lib/referee/rules/core/move.dart`).
->
-> UCI strings are the only thing they share. That's the whole point of the string interface.
+UCI strings and `FenPosition`s are the only things engines and the referee share.
 
-### 2.4 `lib/referee/san.dart`: writing and reading SAN
+### 2.4 `lib/chess_core/san.dart`: writing and reading SAN
 
 SAN is needed in two places: **reading** your openings PGN and **writing** `games.pgn`. The trick that
 keeps this small is that **reading uses writing.** To parse `"Nbd2"`, generate the SAN for every legal
@@ -539,7 +576,7 @@ class San {
 3. Return null. That covers illegal moves **and** ambiguous ones like plain `Nd2` when two knights
    can reach d2, which is correct because that's invalid SAN.
 
-### 2.5 `lib/referee/referee.dart`
+### 2.5 `lib/chess_core/referee.dart`
 
 ```dart
 class Referee {
@@ -568,29 +605,32 @@ class Referee {
 
 Implementation notes:
 
-- **Fields:** `Board _board`, `MoveGenerator _gen`, `List<Move>? _legalCache`, `int _fullMoveNumber`,
+- **Imports:** only `chess_core/rules/…`, `chess_core/notation/…`, `game_end.dart`, `san.dart`.
+- **Fields:** `Board _board` (the **rules** board), `MoveGenerator _gen`, `List<Move>? _legalCache`, `int _fullMoveNumber`,
   `Map<String,int> _repetitions`, `List<String> _uci, _san`.
-- **Zobrist:** `Board` updates a Zobrist key on every move, so initialise the referee copy's tables
+- **Zobrist:** the rules `Board` updates a Zobrist key on every move, so initialise `chess_core/rules/zobrist.dart`'s tables
   once (`static bool _zobristReady`), exactly like the adapter does. The referee doesn't _use_ the
   hash. Repetition uses FEN keys (below), so the referee doesn't depend on hashing being right.
 - **Constructor:** `_board = Board.fromFEN(startFen)`. Read `_fullMoveNumber` from FEN field 6
   (default 1). Record the starting position in `_repetitions`.
 - **`_legal()`:** `_legalCache ??= _gen.generateLegalMoves(_board)`. Set `_legalCache = null` after
   every move. Read `_gen.inCheck` **right after** generating for the current position.
-- **`fen`:** `FENUtility.fenFromBoard(_board)` gives 4 fields. Append `' ${_board.fiftyMoveRule} $_fullMoveNumber'`.
+- **`fen`:** `_board.toFenPosition().toFen()` (6 fields, via the shared FEN writer). If `Board` doesn't track the full-move
+  number, build the `FenPosition` with `_fullMoveNumber` here.
 - **`tryPlayUci`:**
-  1. Validate the format: `RegExp(r'^[a-h][1-8][a-h][1-8][qrbn]?$')`. If it doesn't match, it's malformed.
-  2. Find the move: the first `m` in `_legal()` where `_toUci(m) == uci`. `_toUci` is a private method
-     on `Referee`: `BoardHelper.squareName(m.startingSquare) + BoardHelper.squareName(m.targetSquare)`, plus `'qnrb'[m.promotion - 1]`
-     if `m.promotion != 0`. If there isn't one, it's illegal.
+  1. Validate: `RegExp(r'^[a-h][1-8][a-h][1-8][qrbn]?$')` (strict lowercase), then `UciMove.parse(uci)`.
+     If either fails, it's malformed.
+  2. Find the move: the first `m` in `_legal()` where `m.startingSquare == u.from`, `m.targetSquare == u.to`,
+     and its promotion letter (`m.promotion == 0 ? null : ' qnrb'[m.promotion]`) equals `u.promotion`.
+     If there isn't one, it's illegal.
      That makes `e7e8` (no piece) **illegal** when a promotion is required. That's correct and strict.
   3. Call `_apply(m)`.
 - **`tryPlaySan`:** `m = San.parse(_board, san, _legal())`. If it's null, return `'illegal or ambiguous SAN: $san'`.
   Otherwise call `_apply(m)`.
 - **`_apply(m)`:** `san = San.fromMove(_board, m, _legal())` **before** making the move. Then
   `wasBlack = !_board.whiteToPlay`, `_board.makeMove(m)`, and if `wasBlack` do `_fullMoveNumber++`.
-  Push the UCI and SAN, clear `_legalCache`, and increment `_repetitions[key]`.
-- **Repetition key:** the first 4 FEN fields (pieces, side, castling, en passant). This avoids
+  Push the UCI (`UciMove(from:…, to:…, promotion:…).toString()`) and SAN, clear `_legalCache`, and increment `_repetitions[key]`.
+- **Repetition key:** the first 4 fields of `fen` (pieces, side, castling, en passant). This avoids
   relying on Zobrist. Threefold = the current key's count ≥ 3.
 - **Insufficient material:** move the logic from `GameProvider._getGameResult` into a private method
   `_insufficientMaterial()`: K v K, K+B v K, K+N v K, and K+B v K+B with bishops on the same colour
@@ -608,7 +648,7 @@ Implementation notes:
 
 ### 2.6 Tests
 
-**`test/referee/san_test.dart`**
+**`test/chess_core/san_test.dart`**
 | Position (FEN) | Move | Expected SAN |
 |---|---|---|
 | start | g1f3, e2e4 | `Nf3`, `e4` |
@@ -628,7 +668,7 @@ Also:
 - **Round trip (the most valuable test):** play 20 random games of up to 200 plies with a seeded
   `Random`. At every ply, for every legal move `m`, check `San.parse(board, San.fromMove(board, m, legal), legal)` returns `m`.
 
-**`test/referee/referee_test.dart`**
+**`test/chess_core/referee_test.dart`**
 | Test | Setup | Expect |
 |---|---|---|
 | legal move | start, `e2e4` | null, `uciHistory == ['e2e4']`, `sanHistory == ['e4']` |
@@ -646,19 +686,25 @@ Also:
 | insufficient | `'8/8/8/8/8/8/8/K6k w - - 0 1'` | `insufficientMaterial` |
 | max plies | `Referee(start, maxPlies: 4)` + `g1f3 g8f6 f3g1 f6g8` | `maxMoves` |
 | 4-field FEN | `'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -'` | constructs fine, `fen` ends `0 1` |
-| fen output | start, `e2e4` | `fen` ends with `b KQkq e3 0 1` (check the en passant field matches what v1 produces), then after `e7e5 g1f3` the clocks are `1 2` |
+| fen output | start, `e2e4` | `fen` ends with `b KQkq e3 0 1`, then after `e7e5 g1f3` the clocks are `1 2` |
 
-**`test/referee/rules_perft_test.dart`**: perft on the referee's own board, using **all** the depths in
+**`test/chess_core/fen_test.dart`**: `FenPosition.parse(x).toFen() == x` for the start position, Kiwipete,
+a position with en passant (`…/4P3/… b KQkq e3 0 1`), one with no castling (`-`), and one with clocks
+`37 80`. A 4-field FEN parses with clocks `0 1`.
+
+**`test/chess_core/uci_test.dart`**: what you already have, plus `UciMove.parse` throwing on `'e9e4'`, `'i2i4'` and `'e7e8k'`.
+
+**`test/chess_core/rules_perft_test.dart`**: perft on `chess_core/rules`' own board, using **all** the depths in
 today's `perft_test.dart` plus these two well-known extra positions:
 | FEN | Depth 1 | 2 | 3 | 4 |
 |---|---|---|---|---|
 | `r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10` | 46 | 2,079 | 89,890 | 3,894,594 |
 | `n1n5/PPPk4/8/8/8/8/4Kppp/5N1N b - - 0 1` (promotions) | 24 | 496 | 9,483 | 182,838 |
 
-If any of these fail, you've found a real rules bug that v1 has too. Fix it in the referee, and note
+If any of these fail, you've found a real rules bug that v1 has too. Fix it in `chess_core/rules`, and note
 it in §11 as a v1 bug for v2.
 
-**Done when:** all referee, SAN and perft tests pass.
+**Done when:** all `chess_core` tests pass (purity, FEN, UCI, SAN, referee and perft), and nothing in `chess_core/` imports `engines/`.
 
 ### 2.7 `lib/engines/random/random_engine.dart`
 
@@ -671,6 +717,12 @@ assertion that v1's move is in `Referee(start).legalUciMoves()`.
 ---
 
 ## Phase 3: Loading your openings
+
+> **If you use `lib/match/opening_book_data.dart`** (500 lines of 16 UCI moves from the start position)
+> instead of a PGN file, most of this phase shrinks. `OpeningBook` just plays each line through
+> `Referee(FenPosition.startingPosition)` with `tryPlayUci`, and takes `referee.fen` (warn and skip if a
+> move is rejected or the game is already over). You can skip 3.0 and 3.1b/3.1c. `PgnReader` is then only
+> needed for the round-trip test in Phase 6, and SAN is still needed for writing `games.pgn`.
 
 ### 3.0 Look at your PGN first
 
@@ -1154,11 +1206,11 @@ Methods (keep the public names the GUI already uses where you can):
 - `List<String> get engineIds => EngineRegistry.versionIds;` and `String get engineId`.
 - `Future<void> setEngine(String id)` creates `EngineRegistry.create(id)`, calls `reset()`, and calls `notifyListeners()`.
 - `int pieceAt(int index) => _referee.pieceAt(index);` The referee's rules core uses the same int piece
-  codes as today, so `PieceImage.forPiece` and `square.dart` keep working. Just switch `PieceImage`'s import
-  of `Piece` to `package:ace/referee/rules/core/piece.dart`.
+  codes as today, so `pieceImage` and `square.dart` keep working. `piece_image.dart` imports `Piece`
+  from `package:ace/chess_core/notation/piece.dart`.
 - `List<int> legalTargetsFrom(int index)`: from `_referee.legalUciMoves()`, keep those starting at
   `BoardHelper.squareName(index)` and map the target back with `BoardHelper.squareIndex`. Import
-  `BoardHelper` from `package:ace/referee/rules/helpers/board_helper.dart`.
+  `BoardHelper` from `package:ace/chess_core/notation/board_helper.dart`.
 - `bool get whiteToPlay => _referee.whiteToMove;`
 - `({int from, int to})? get lastMove`: from the last UCI in `uciHistory`.
 - `move(int targetIndex)`: build the UCI from `_selectedIndex` → `targetIndex`. If a pawn moves to the last
@@ -1203,8 +1255,8 @@ Methods (keep the public names the GUI already uses where you can):
 ## Phase 10: Your first experiment, v2 = v1 + bug fixes
 
 1. `dart run tool/snapshot_engine.dart --from v1 --to v2`
-2. In `lib/engines/v2/adapter.dart`, change `id`/`displayName` to `v2` / `ACE v2`.
-3. Add `'v2': () => v2.AceEngine(),` to the registry.
+2. Check the tool renamed the adapter to `lib/engines/v2/v2_engine.dart` / `V2Engine`, with `id`/`displayName` `v2` / `ACE v2`.
+3. Add `'v2': () => V2Engine(),` to the registry.
 4. Fix the bugs from §11 **inside `lib/engines/v2/` only**.
 5. `flutter test` (perft and purity tests now cover v2 automatically).
 6. Quick check: `--a v2 --b v1 --games 100 --movetime 20`.
@@ -1224,7 +1276,7 @@ depends on it inside the snapshot:
 | `Board.hashHistory` (repetition)              | counting how often a position occurred | Key by something else, e.g. the first 4 FEN fields (slow in search) or a list of piece arrays plus side/castling/ep compared on demand. **Or drop repetition detection.** Then the engine can't see draws coming, so it may walk into repetitions when winning and miss saving ones when losing. The referee still enforces the draw |
 | `TranspositionTable`                          | keying entries                         | remove the TT (and the `entry` lookups/stores in `search`), or key it some other way                                                                                                                                                                                                                                                 |
 | `MoveOrdering` (if it reads the TT best move) | ordering the TT move first             | just use the previous iteration's best move                                                                                                                                                                                                                                                                                          |
-| `adapter.dart`                                | the `Zobrist()` init call              | delete it                                                                                                                                                                                                                                                                                                                            |
+| `v2_engine.dart` (the adapter)                | the `Zobrist()` init call              | delete it                                                                                                                                                                                                                                                                                                                            |
 
 Then run the usual checks: perft (all of the above can break `unMakeMove` if done carelessly),
 the purity test, a quick 100-game run, then the full match. Expect it to be **weaker**. The TT is a
@@ -1239,20 +1291,20 @@ caused the gain or loss.
 
 Found while reading the code. Line numbers are as of commit `a26b7e1`.
 
-| #   | Where                                                | Bug                                                                                                                                                                                       | Effect                                                                                                          | Fix in v2                                                                                                                                                                       |
-| --- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B1  | `core/move.dart` `toChessNotation()`                 | Promotion piece not included (`e7e8` instead of `e7e8q`)                                                                                                                                  | Can't express underpromotion in UCI                                                                             | Append `'qnrb'[promotion-1]` when `promotion != 0`. (The adapter already works around this for v1.)                                                                             |
-| B2  | `ai/engine.dart` lines 46–85                         | `print` every iteration and every move                                                                                                                                                    | Slows down search and floods output                                                                             | Remove, or put behind a `bool verbose = false`                                                                                                                                  |
-| B3  | `ai/engine.dart` `search()` lines 97–100 and 158–161 | On timeout it calls `evaluation.evaluate(board);` and **throws the result away**, then keeps searching the node (TT probe, move generation…)                                              | Wastes time after the deadline and causes overruns                                                              | Replace it with `return 0;` (the value is ignored because the iteration is aborted). Also check `abortSearch` at the top                                                        |
-| B4  | `ai/engine.dart` `quiescenceSearch()`                | Never checks the clock, only `abortSearch`                                                                                                                                                | Long capture sequences overrun `movetime`. You'll see this in "max ms" / "overruns"                             | Check the stopwatch every N nodes (e.g. `if (++qNodes & 1023 == 0 && stopwatch.elapsed >= maxDuration) abortSearch = true;`)                                                    |
-| B5  | `ai/engine.dart` line 121                            | Draw check `board.hashHistory.values.any((e) => e >= 3)` asks whether **any** position in the history occurred 3 times, not the **current** one. It's also checked **after** the TT probe | Once any position in the game has hit 3, the engine thinks every node is a draw. The TT can also skip the check | `if (plyFromRoot > 0 && (board.hashHistory[board.zobristKey] ?? 0) >= 2) return 0;` (inside search, a single repeat is enough to score as a draw). Do it before the TT probe    |
-| B6  | `core/board.dart` constructors                       | The starting position's hash is never added to `hashHistory`                                                                                                                              | A repetition of the start position is counted one short                                                         | Call `addMoveToHashHistory(zobristKey)` at the end of both constructors                                                                                                         |
-| B7  | `helpers/fen_utility.dart` + `Board.fromFEN`         | The half-move clock is read into a field misnamed `plyCount` and never used. `fiftyMoveRule` is always 0. A FEN with only 4 fields crashes on `sections[4]`                               | The engine doesn't see the fifty-move rule approaching from mid-game FENs. 4-field FENs crash                   | Set `fiftyMoveRule = int.parse(sections[4])` when present (default 0), and parse the full-move number too                                                                       |
-| B8  | `helpers/fen_utility.dart` `fenFromBoard()`          | Output has only 4 fields (no half-move/full-move)                                                                                                                                         | Other tools reject the FEN                                                                                      | Append `" $fiftyMoveRule ${gamePosition ~/ 2 + 1}"` (or track the full-move number properly)                                                                                    |
-| B9  | `ai/transposition_table.dart` `retrieve()`           | Computes the mate-adjusted `eval` but returns `entry`, whose `eval` is unadjusted. `search()` then returns `entry.eval`                                                                   | Mate distances from the TT are wrong, and the engine can delay or miss the fastest mate                         | Return the adjusted eval (e.g. return an `int?` eval instead of the entry, or a copy with the adjusted eval). Make sure stores convert mate scores to "distance from this node" |
-| B10 | `ai/engine.dart` root TT hit                         | At `plyFromRoot == 0` a TT hit sets `bestMoveThisIteration` but not `hasSearchedAtLeastOneMove`. It can also accept a bound (not exact) entry as the root result                          | Rare wrong or `null` root move                                                                                  | Skip the TT cut-off at the root (`if (plyFromRoot > 0 && entry != null)`)                                                                                                       |
-| B11 | `ai/engine.dart` yield                               | `if (stopwatch.elapsedMilliseconds % 10 == 0) await Future.delayed(Duration.zero);` only yields when the ms count happens to be a multiple of 10                                          | The UI can stutter on the phone, and timing is irregular                                                        | Yield every N nodes instead (e.g. every 2048)                                                                                                                                   |
-| B12 | `providers/game_provider.dart` `_getGameResult`      | The same "any position ×3" repetition bug, and `>= 100` vs the engine's `> 100`                                                                                                           | The app declares false repetition draws                                                                         | Goes away in Phase 9 (the referee replaces it)                                                                                                                                  |
+| #                                                                        | Where                                                | Bug                                                                                                                                                                                       | Effect                                                                                                          | Fix in v2                                                                                                                                                                       |
+| ------------------------------------------------------------------------ | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B1                                                                       | `core/move.dart` `toChessNotation()`                 | Promotion piece not included (`e7e8` instead of `e7e8q`)                                                                                                                                  | Can't express underpromotion in UCI                                                                             | Append `'qnrb'[promotion-1]` when `promotion != 0`. (The adapter already works around this for v1.)                                                                             |
+| B2                                                                       | `ai/engine.dart` lines 46–85                         | `print` every iteration and every move                                                                                                                                                    | Slows down search and floods output                                                                             | Remove, or put behind a `bool verbose = false`                                                                                                                                  |
+| B3                                                                       | `ai/engine.dart` `search()` lines 97–100 and 158–161 | On timeout it calls `evaluation.evaluate(board);` and **throws the result away**, then keeps searching the node (TT probe, move generation…)                                              | Wastes time after the deadline and causes overruns                                                              | Replace it with `return 0;` (the value is ignored because the iteration is aborted). Also check `abortSearch` at the top                                                        |
+| B4                                                                       | `ai/engine.dart` `quiescenceSearch()`                | Never checks the clock, only `abortSearch`                                                                                                                                                | Long capture sequences overrun `movetime`. You'll see this in "max ms" / "overruns"                             | Check the stopwatch every N nodes (e.g. `if (++qNodes & 1023 == 0 && stopwatch.elapsed >= maxDuration) abortSearch = true;`)                                                    |
+| B5                                                                       | `ai/engine.dart` line 121                            | Draw check `board.hashHistory.values.any((e) => e >= 3)` asks whether **any** position in the history occurred 3 times, not the **current** one. It's also checked **after** the TT probe | Once any position in the game has hit 3, the engine thinks every node is a draw. The TT can also skip the check | `if (plyFromRoot > 0 && (board.hashHistory[board.zobristKey] ?? 0) >= 2) return 0;` (inside search, a single repeat is enough to score as a draw). Do it before the TT probe    |
+| B6                                                                       | `core/board.dart` constructors                       | The starting position's hash is never added to `hashHistory`                                                                                                                              | A repetition of the start position is counted one short                                                         | Call `addMoveToHashHistory(zobristKey)` at the end of both constructors                                                                                                         |
+| B7 ✅ (fixed for all versions by shared `FenPosition`)                   | `helpers/fen_utility.dart` + `Board.fromFEN`         | The half-move clock is read into a field misnamed `plyCount` and never used. `fiftyMoveRule` is always 0. A FEN with only 4 fields crashes on `sections[4]`                               | The engine doesn't see the fifty-move rule approaching from mid-game FENs. 4-field FENs crash                   | Set `fiftyMoveRule = int.parse(sections[4])` when present (default 0), and parse the full-move number too                                                                       |
+| B8 ✅ (use `FenPosition.toFen()` if an engine ever needs to write a FEN) | `helpers/fen_utility.dart` `fenFromBoard()`          | Output has only 4 fields (no half-move/full-move)                                                                                                                                         | Other tools reject the FEN                                                                                      | Append `" $fiftyMoveRule ${gamePosition ~/ 2 + 1}"` (or track the full-move number properly)                                                                                    |
+| B9                                                                       | `ai/transposition_table.dart` `retrieve()`           | Computes the mate-adjusted `eval` but returns `entry`, whose `eval` is unadjusted. `search()` then returns `entry.eval`                                                                   | Mate distances from the TT are wrong, and the engine can delay or miss the fastest mate                         | Return the adjusted eval (e.g. return an `int?` eval instead of the entry, or a copy with the adjusted eval). Make sure stores convert mate scores to "distance from this node" |
+| B10                                                                      | `ai/engine.dart` root TT hit                         | At `plyFromRoot == 0` a TT hit sets `bestMoveThisIteration` but not `hasSearchedAtLeastOneMove`. It can also accept a bound (not exact) entry as the root result                          | Rare wrong or `null` root move                                                                                  | Skip the TT cut-off at the root (`if (plyFromRoot > 0 && entry != null)`)                                                                                                       |
+| B11                                                                      | `ai/engine.dart` yield                               | `if (stopwatch.elapsedMilliseconds % 10 == 0) await Future.delayed(Duration.zero);` only yields when the ms count happens to be a multiple of 10                                          | The UI can stutter on the phone, and timing is irregular                                                        | Yield every N nodes instead (e.g. every 2048)                                                                                                                                   |
+| B12                                                                      | `providers/game_provider.dart` `_getGameResult`      | The same "any position ×3" repetition bug, and `>= 100` vs the engine's `> 100`                                                                                                           | The app declares false repetition draws                                                                         | Goes away in Phase 9 (the referee replaces it)                                                                                                                                  |
 
 > B1 and B2 are already handled for v1 by the adapter, so v1 still plays correctly in matches. B3–B11
 > are real strength/correctness issues, so fixing them should give v2 a measurable Elo gain.
@@ -1303,8 +1355,8 @@ new version is better by ≥ X Elo (or not). It typically stops after 100–500 
 ## 13. Master checklist
 
 - [ ] **P0**: baseline green, `getImg` moved out of `Piece`, `args` added, `match_results/` git-ignored, openings copied in
-- [ ] **P1**: `engine_interface.dart`, `tool/snapshot_engine.dart`, `lib/engines/v1/` + `adapter.dart`, `EngineRegistry`, plus adapter/perft/purity tests
-- [ ] **P2**: `lib/referee/rules/` copy + R1/R2 fixes, `San`, `Referee`, `GameEnd`, `RandomEngine`, plus SAN (incl. round trip), referee and rules perft tests
+- [ ] **P1**: `engine_interface.dart`, `tool/snapshot_engine.dart`, `lib/engines/v1/` + `v1_engine.dart`, `EngineRegistry`, plus adapter/perft/purity tests
+- [ ] **P2**: `chess_core/notation/` (piece, board_helper, FEN parse+write, UCI) + `chess_core/rules/` (own copy, no engine imports), `San`, `Referee`, `GameEnd`, `RandomEngine`, plus purity, FEN, UCI, SAN (incl. round trip), referee and rules perft tests
 - [ ] **P3**: `PgnReader`, `OpeningBook`, plus tests. Your real file loads cleanly
 - [ ] **P4**: `GameRecord`, `GameRunner`, fake engines, plus game tests
 - [ ] **P5**: `MatchConfig`, `MatchRunner`, `elo.dart`, `MatchStats`, plus tests (Elo table)

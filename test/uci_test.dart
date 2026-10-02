@@ -1,5 +1,5 @@
-import 'package:ace/referee/rules/board_helper.dart';
-import 'package:ace/referee/rules/uci.dart';
+import 'package:ace/chess_core/notation/board_helper.dart';
+import 'package:ace/chess_core/notation/uci.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
