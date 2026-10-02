@@ -1,0 +1,83 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:ace/engines/engine_registry.dart';
+import 'package:ace/match/opening_book.dart';
+import 'package:ace/match_manager/match_config.dart';
+import 'package:ace/match_manager/match_output.dart';
+import 'package:ace/match_manager/match_runner.dart';
+import 'package:args/args.dart';
+
+/// dart run bin/match.dart --a v2 --b v1 [--games 1000] [--movetime 100] [--max-moves 300] [--out match_results]
+Future<void> main(List<String> arguments) async {
+  final parser = ArgParser()
+    ..addOption('a', help: 'Engine A id (the one being tested)')
+    ..addOption('b', help: 'Engine B id (the baseline)')
+    ..addOption('games', defaultsTo: '1000', help: 'Number of games (even)')
+    ..addOption('movetime', defaultsTo: '100', help: 'Thinking time per move, ms')
+    ..addOption('max-moves', defaultsTo: '300', help: 'Engine moves per side before a draw is declared')
+    ..addOption('out', defaultsTo: 'match_results', help: 'Folder for results')
+    ..addFlag('list', negatable: false, help: 'List engine ids and exit')
+    ..addFlag('help', abbr: 'h', negatable: false);
+
+  late final ArgResults args;
+  late final MatchConfig config;
+  try {
+    args = parser.parse(arguments);
+    if (args['help'] as bool) _usage(parser, 0);
+    if (args['list'] as bool) {
+      stdout.writeln(EngineRegistry.allIds.join('\n'));
+      exit(0);
+    }
+    final a = args['a'] as String?, b = args['b'] as String?;
+    if (a == null || b == null) throw const FormatException('--a and --b are required');
+    for (final id in [a, b]) {
+      if (!EngineRegistry.allIds.contains(id)) {
+        throw FormatException('Unknown engine "$id". Known: ${EngineRegistry.allIds.join(', ')}');
+      }
+    }
+    config = MatchConfig(
+      engineAId: a,
+      engineBId: b,
+      games: int.parse(args['games'] as String),
+      moveTime: Duration(milliseconds: int.parse(args['movetime'] as String)),
+      maxMoves: int.parse(args['max-moves'] as String),
+    );
+  } on FormatException catch (e) {
+    stderr.writeln('Error: ${e.message}\n');
+    _usage(parser, 64);
+  } on ArgumentError catch (e) {
+    stderr.writeln('Error: ${e.message}\n');
+    _usage(parser, 64);
+  }
+
+  final book = OpeningBook.standard();
+  for (final warning in book.warnings) {
+    stderr.writeln('Opening book: $warning');
+  }
+
+  final engineA = EngineRegistry.create(config.engineAId);
+  final engineB = EngineRegistry.create(config.engineBId);
+  final output = MatchOutput.create(config, engineAName: engineA.displayName, engineBName: engineB.displayName);
+
+  stdout.writeln('${engineA.displayName} (A) vs ${engineB.displayName} (B): ${config.games} games, '
+      '${config.moveTime.inMilliseconds} ms/move, ${book.openings.length} openings');
+  stdout.writeln('Writing results to ${output.directory.path}\n');
+
+  final stats = await MatchRunner(config).runMatch(engineA: engineA, engineB: engineB);
+
+  // Standard end-of-match bookkeeping: write the config and both summaries once the match is done.
+  output.writeConfig(openingCount: book.openings.length, warnings: [...book.warnings]);
+  output.writeSummary(stats);
+  output.writeSummaryJson(stats);
+
+  stdout.writeln('\n${stats.toSummaryText(openingsDescription: 'opening_book_data.dart')}');
+  stdout.writeln('Results: ${output.directory.path}');
+  exit(0);
+}
+
+Never _usage(ArgParser parser, int code) {
+  (code == 0 ? stdout : stderr)
+      .writeln('Usage: dart run bin/match.dart --a <engine> --b <engine> [options]\n\n${parser.usage}');
+  exit(code);
+}

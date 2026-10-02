@@ -12,7 +12,9 @@ void main() {
       .where((dir) => RegExp(r'^v\d+$').hasMatch(dir.uri.pathSegments.where((s) => s.isNotEmpty).last))
       .toList();
 
-  expect(versionDirs, isNotEmpty, reason: 'expected at least one lib/engines/v* snapshot folder');
+  test('at least one lib/engines/v* snapshot folder exists', () {
+    expect(versionDirs, isNotEmpty, reason: 'expected at least one lib/engines/v* snapshot folder');
+  });
 
   for (final versionDir in versionDirs) {
     final versionId = versionDir.uri.pathSegments.where((s) => s.isNotEmpty).last;
@@ -30,7 +32,7 @@ void main() {
           for (final import in imports) {
             final allowed = import.startsWith('dart:') ||
                 import.startsWith('package:ace/engines/$versionId/') ||
-                import.startsWith('package:ace/referee/rules/') ||
+                import.startsWith('package:ace/chess_core/notation/') ||
                 (isAdapter && import == 'package:ace/engines/engine_interface.dart');
 
             expect(
