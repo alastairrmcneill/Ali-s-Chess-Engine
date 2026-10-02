@@ -31,4 +31,12 @@ class GameEnd {
         GameOutcome.blackWin => "0-1",
         GameOutcome.draw => "1/2-1/2",
       };
+
+  @override
+  String toString() {
+    return '''GameEnd(
+      outcome: $outcome,
+      termination: $termination,
+      detail: $detail)''';
+  }
 }

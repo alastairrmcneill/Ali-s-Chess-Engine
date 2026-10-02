@@ -8,6 +8,15 @@ class MoveStat {
   final int? evaluation; // positive = good for White
 
   const MoveStat(this.timeMs, this.depth, this.nodes, this.evaluation);
+
+  @override
+  String toString() {
+    return '''MoveStat(
+      timeMs: $timeMs,
+      depth: $depth,
+      nodes: $nodes,
+      evaluation: $evaluation)''';
+  }
 }
 
 class GameRecord {
@@ -46,4 +55,24 @@ class GameRecord {
   /// Whether the engine move at [engineMoveIndex] (index into [moveStats]) was played by White.
   /// Games start from the standard position, so White plays the even plies.
   bool engineMoveIsWhite(int engineMoveIndex) => (bookPlies + engineMoveIndex).isEven;
+
+  @override
+  String toString() {
+    return '''GameRecord(
+      gameNumber: $gameNumber, 
+      openingIndex: $openingIndex,
+      startFen: $startFen,
+      bookPlies: $bookPlies,
+      whiteId: $whiteId,
+      blackId: $blackId,
+      whiteName: $whiteName,
+      blackName: $blackName,
+      engineAIsWhite: $engineAIsWhite,
+      end: $end,
+      uciMoves: $uciMoves,
+      sanMoves: $sanMoves,
+      moveStats: $moveStats,
+      errorDetail: $errorDetail,
+      duration: $duration)''';
+  }
 }
