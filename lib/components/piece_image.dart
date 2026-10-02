@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ace/referee/rules/piece.dart';
+import 'package:ace/chess_core/notation/piece.dart';
 
 Widget pieceImage(int piece) {
   String imgString = "";

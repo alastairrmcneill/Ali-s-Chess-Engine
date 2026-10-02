@@ -1,9 +1,8 @@
 // ignore_for_file: file_names
 
-import 'package:ace/engines/v1/core/move.dart';
-import 'package:ace/engines/v1/core/piece.dart';
+import 'package:ace/chess_core/notation/piece.dart';
 import 'package:ace/components/square.dart';
-import 'package:ace/referee/rules/board_helper.dart';
+import 'package:ace/chess_core/notation/board_helper.dart';
 import 'package:ace/providers/game_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -22,13 +21,12 @@ class _GUIState extends State<GUI> {
   void initState() {
     super.initState();
     GameProvider gameProvider = Provider.of<GameProvider>(context, listen: false);
-    gameProvider.reset();
     _controller = TextEditingController(text: gameProvider.thinkingTime.toString());
   }
 
   void onSquareTapped(GameProvider gameProvider, int index) async {
     // Only allow interaction when game is still in playing state
-    if (gameProvider.gameResult == Result.playing) {
+    if (gameProvider.isPlaying) {
       gameProvider.select(index);
     }
   }
@@ -41,6 +39,24 @@ class _GUIState extends State<GUI> {
       body: SafeArea(
         child: Column(
           children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text("Opponent: "),
+                DropdownButton<String>(
+                  value: gameProvider.engineId,
+                  items: [
+                    for (final id in gameProvider.engineIds) DropdownMenuItem(value: id, child: Text('ACE $id')),
+                  ],
+                  // Changing the version starts a new game.
+                  onChanged: gameProvider.engineThinking
+                      ? null
+                      : (id) {
+                          if (id != null) gameProvider.setEngine(id);
+                        },
+                ),
+              ],
+            ),
             Text("Turn: ${gameProvider.whiteToPlay ? "White" : "Black"}"),
             Expanded(
               flex: 1,
@@ -53,37 +69,26 @@ class _GUIState extends State<GUI> {
                   int file = BoardHelper.getFileFromIndex(index);
                   bool isWhite = (rank + file) % 2 == 0;
                   bool isSelected = index == gameProvider.selectedIndex;
-                  bool isSquareValid = false;
+                  int piece = gameProvider.pieceAt(index);
 
                   bool isDraggable = false;
                   // If peice is white and whites turn
-                  if ((Piece.isColor(gameProvider.board.position[index], Piece.white) && gameProvider.whiteToPlay)) {
+                  if ((Piece.isColor(piece, Piece.white) && gameProvider.whiteToPlay)) {
                     isDraggable = true;
                   }
 
                   // Or Piece is black and blacks turn
-                  if ((Piece.isColor(gameProvider.board.position[index], Piece.black) && !gameProvider.whiteToPlay)) {
+                  if ((Piece.isColor(piece, Piece.black) && !gameProvider.whiteToPlay)) {
                     isDraggable = true;
                   }
 
                   // Check if square is valid move option
-                  if (gameProvider.selectedIndex != null) {
-                    List<Move> selectPieceMoves = gameProvider.legalMoves
-                        .where((move) => move.startingSquare == gameProvider.selectedIndex)
-                        .toList();
-
-                    for (var i = 0; i < selectPieceMoves.length; i++) {
-                      Move move = selectPieceMoves[i];
-
-                      if (move.targetSquare == index) {
-                        isSquareValid = true;
-                        break;
-                      }
-                    }
-                  }
+                  int? selectedIndex = gameProvider.selectedIndex;
+                  bool isSquareValid =
+                      selectedIndex != null && gameProvider.legalTargetsFrom(selectedIndex).contains(index);
 
                   // Last move highlight
-                  Move lastMove = gameProvider.lastMove;
+                  final lastMove = gameProvider.lastMove;
 
                   return DragTarget<int>(
                     onAccept: (receivedPiece) {
@@ -101,10 +106,10 @@ class _GUIState extends State<GUI> {
                         isSelected: isSelected,
                         isSquareValid: isSquareValid,
                         isDraggable: isDraggable,
-                        isLastMove: index == lastMove.startingSquare || index == lastMove.targetSquare,
-                        piece: gameProvider.board.position[index],
+                        isLastMove: lastMove != null && (index == lastMove.from || index == lastMove.to),
+                        piece: piece,
                         onTap: () => onSquareTapped(gameProvider, index),
-                        onDragComplete: () => gameProvider.board.position[index] = 0,
+                        onDragComplete: () {}, // the provider moves the piece when the drop is accepted
                         onDragStarted: () => gameProvider.selectedIndex = index,
                         onDragableCancelled: (p0, p1) => gameProvider.selectedIndex = null,
                       );
@@ -114,7 +119,9 @@ class _GUIState extends State<GUI> {
               ),
             ),
             Text(gameProvider.engineThinking ? "Engine is thinking" : "Engine is idle"),
-            Text(gameProvider.gameResult.toString()),
+            Text(gameProvider.gameEnd?.toString() ?? "Playing"),
+            if (gameProvider.engineProblem != null)
+              Text(gameProvider.engineProblem!, style: const TextStyle(color: Colors.red)),
             const Text("Thinking time (ms)"),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
