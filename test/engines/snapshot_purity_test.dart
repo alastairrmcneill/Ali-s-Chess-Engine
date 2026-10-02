@@ -12,7 +12,9 @@ void main() {
       .where((dir) => RegExp(r'^v\d+$').hasMatch(dir.uri.pathSegments.where((s) => s.isNotEmpty).last))
       .toList();
 
-  expect(versionDirs, isNotEmpty, reason: 'expected at least one lib/engines/v* snapshot folder');
+  test('there is at least one lib/engines/v* snapshot folder', () {
+    expect(versionDirs, isNotEmpty);
+  });
 
   for (final versionDir in versionDirs) {
     final versionId = versionDir.uri.pathSegments.where((s) => s.isNotEmpty).last;
@@ -22,7 +24,7 @@ void main() {
           versionDir.listSync(recursive: true).whereType<File>().where((f) => f.path.endsWith('.dart')).toList();
 
       for (final file in dartFiles) {
-        test('${file.path} only imports dart: or package:ace/engines/$versionId/...', () {
+        test('${file.path} only imports dart:, its own version, or chess_core/notation', () {
           final content = file.readAsStringSync();
           final isAdapter = content.contains('implements ChessEngine');
           final imports = _importRegExp.allMatches(content).map((m) => m.group(1)!);
@@ -30,7 +32,7 @@ void main() {
           for (final import in imports) {
             final allowed = import.startsWith('dart:') ||
                 import.startsWith('package:ace/engines/$versionId/') ||
-                import.startsWith('package:ace/referee/rules/') ||
+                import.startsWith('package:ace/chess_core/notation/') || // shared standards code only
                 (isAdapter && import == 'package:ace/engines/engine_interface.dart');
 
             expect(

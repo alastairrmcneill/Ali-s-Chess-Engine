@@ -1,8 +1,10 @@
-import 'package:ace/referee/rules/uci.dart';
+import 'dart:async';
+
+import 'package:ace/chess_core/notation/uci.dart';
 import 'package:ace/engines/engine_interface.dart';
-import 'package:ace/engines/v1/core/move.dart';
 import 'package:ace/engines/v1/ai/engine.dart';
 import 'package:ace/engines/v1/core/board.dart';
+import 'package:ace/engines/v1/core/move.dart';
 import 'package:ace/engines/v1/core/move_generator.dart';
 import 'package:ace/engines/v1/core/zobrist.dart';
 
@@ -11,7 +13,7 @@ class V1Engine implements ChessEngine {
   String get id => 'v1';
 
   @override
-  String get displayName => 'V1 Engine';
+  String get displayName => 'ACE v1';
 
   static bool _zobristReady = false;
   late Engine _engine;
@@ -34,32 +36,31 @@ class V1Engine implements ChessEngine {
 
   @override
   Future<EngineMoveResult> getMove(String startingFen, List<String> uciMoves, SearchLimits limits) async {
-    final board = Board.fromFEN(startingFen);
-    final moveGenerator = MoveGenerator();
+    final board = _boardAfter(startingFen, uciMoves);
 
-    for (final uciMove in uciMoves) {
-      Move? legalMove;
-      for (final candidate in moveGenerator.generateLegalMoves(board)) {
-        if (moveToUci(candidate) == uciMove) {
-          legalMove = candidate;
-          break;
-        }
-      }
-      if (legalMove == null) {
-        throw StateError('v1 move generator does not consider "$uciMove" a legal move');
-      }
-      board.makeMove(legalMove);
+    // The engine prints on every iteration. Swallow it, but read the completed depth from it.
+    int? completedDepth;
+    final depthPattern = RegExp(r'After searching with depth (\d+)');
+    final bestMove = await runZoned(
+      () => _engine.getBestMove(board, limits.moveTime.inMilliseconds),
+      zoneSpecification: ZoneSpecification(print: (self, parent, zone, line) {
+        final match = depthPattern.firstMatch(line);
+        if (match != null) completedDepth = int.parse(match.group(1)!);
+      }),
+    );
+
+    // The engine can return null, or Move.invalid from a transposition table hit at the root.
+    if (bestMove == null || bestMove.startingSquare < 0) {
+      throw StateError('$id returned no move');
     }
 
-    final bestMove = await _engine.getBestMove(board, limits.moveTime.inMilliseconds);
-
-    if (bestMove == null) {
-      throw Exception('No valid move found');
-    }
+    // The engine's eval is from the side to move's point of view (negamax); the interface wants White's.
+    final eval = board.whiteToPlay ? _engine.bestEval : -_engine.bestEval;
 
     return EngineMoveResult(
       uciMove: moveToUci(bestMove),
-      evaluation: _engine.bestEval,
+      evaluation: eval,
+      depth: completedDepth,
       nodes: _engine.debugInfo.numNodes + _engine.debugInfo.numQNodes,
     );
   }
@@ -84,11 +85,41 @@ class V1Engine implements ChessEngine {
     return nodes;
   }
 
-  String moveToUci(Move move) {
+  /// Builds this version's board from [fen] and replays [uciMoves], so it sees the repetition history.
+  /// Throws [StateError] if this version's own move generator doesn't think a move is legal.
+  static Board _boardAfter(String fen, List<String> uciMoves) {
+    final board = Board.fromFEN(fen);
+    final moveGenerator = MoveGenerator();
+
+    for (int i = 0; i < uciMoves.length; i++) {
+      final uciMove = uciMoves[i];
+      Move? legalMove;
+      for (final candidate in moveGenerator.generateLegalMoves(board)) {
+        if (moveToUci(candidate) == uciMove) {
+          legalMove = candidate;
+          break;
+        }
+      }
+      if (legalMove == null) {
+        throw StateError('Engine move generator does not consider "$uciMove" legal (ply ${i + 1})');
+      }
+      board.makeMove(legalMove);
+    }
+    return board;
+  }
+
+  /// Version-specific mapping from this version's Move to a UCI string. Promotion codes: 1 = q, 2 = n, 3 = r, 4 = b.
+  static String moveToUci(Move move) {
     return UciMove(
-            from: move.startingSquare,
-            to: move.targetSquare,
-            promotion: move.promotion == 0 ? null : " qnrb"[move.promotion])
-        .toString();
+      from: move.startingSquare,
+      to: move.targetSquare,
+      promotion: move.promotion == 0 ? null : ' qnrb'[move.promotion],
+    ).toString();
+  }
+
+  /// Legal moves from this version's own move generator, as UCI. Used by tests.
+  static Set<String> legalUciMoves(String fen, List<String> uciMoves) {
+    final board = _boardAfter(fen, uciMoves);
+    return MoveGenerator().generateLegalMoves(board).map(moveToUci).toSet();
   }
 }

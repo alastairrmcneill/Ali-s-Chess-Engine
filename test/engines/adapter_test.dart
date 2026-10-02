@@ -1,31 +1,22 @@
+import 'package:ace/chess_core/notation/fen.dart';
+import 'package:ace/chess_core/referee.dart';
 import 'package:ace/engines/engine_interface.dart';
 import 'package:ace/engines/engine_registry.dart';
-import 'package:ace/engines/v1/core/board.dart';
-import 'package:ace/engines/v1/core/move_generator.dart';
 import 'package:ace/engines/v1/v1_engine.dart';
-import 'package:ace/referee/rules/fen.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 final _uciMoveRegExp = RegExp(r'^[a-h][1-8][a-h][1-8][qrbn]?$');
 
 // Per-version helpers for checking that a move is in the engine's own legal move list.
-// Only v1 is wired up today; future versions can add their own entry here.
+// Add an entry when you add a version.
 final _ownLegalMoves = <String, Set<String> Function(String fen, List<String> uciMoves)>{
-  'v1': (fen, uciMoves) {
-    final board = Board.fromFEN(fen);
-    for (final uciMove in uciMoves) {
-      board.makeMove(
-        MoveGenerator().generateLegalMoves(board).firstWhere((m) => V1Engine().moveToUci(m) == uciMove),
-      );
-    }
-    return MoveGenerator().generateLegalMoves(board).map((m) => V1Engine().moveToUci(m)).toSet();
-  },
+  'v1': V1Engine.legalUciMoves,
 };
 
 void main() {
   for (final id in EngineRegistry.versionIds) {
     group('Engine: $id', () {
-      final limits = SearchLimits(moveTime: const Duration(milliseconds: 50));
+      const limits = SearchLimits(moveTime: Duration(milliseconds: 50));
 
       test('returns a well-formed, legal UCI move from the start position', () async {
         final engine = EngineRegistry.create(id);
@@ -37,14 +28,15 @@ void main() {
         if (legalMoves != null) {
           expect(legalMoves(FenPosition.startingPosition, []), contains(result.uciMove));
         }
+        expect(Referee(FenPosition.startingPosition).legalUciMoves(), contains(result.uciMove));
       });
 
-      test('promotes when the only reasonable move is a pawn push to the back rank', () async {
+      test('includes the promotion piece when the only legal moves are promotions', () async {
         final engine = EngineRegistry.create(id);
-        final result = await engine.getMove('4k3/1P6/8/8/8/8/8/4K3 w - - 0 1', [], limits);
+        // White's king is boxed in by the queen on b3, so c7-c8 (=Q/R/B/N) are the only legal moves.
+        final result = await engine.getMove('7k/2P5/8/8/8/1q6/8/K7 w - - 0 1', [], limits);
 
-        expect(result.uciMove, startsWith('b7b8'));
-        expect(result.uciMove, hasLength(5));
+        expect(result.uciMove, matches(RegExp(r'^c7c8[qrbn]$')));
       });
 
       test('replaying a history that includes castling does not throw', () async {
@@ -83,6 +75,23 @@ void main() {
 
         final second = await engine.getMove(FenPosition.startingPosition, [], limits);
         expect(second.uciMove, matches(_uciMoveRegExp));
+      });
+
+      // Longer think time so at least one iteration completes even when tests run in parallel.
+      const slowLimits = SearchLimits(moveTime: Duration(milliseconds: 300));
+
+      test('reports the search depth', () async {
+        final result = await EngineRegistry.create(id).getMove(FenPosition.startingPosition, [], slowLimits);
+        expect(result.depth, isNotNull);
+        expect(result.depth!, greaterThanOrEqualTo(1));
+      });
+
+      test('reports the eval from White\'s point of view', () async {
+        final engine = EngineRegistry.create(id);
+        // Black to move and a queen up: the eval should be clearly negative (good for Black).
+        final result = await engine.getMove('4k3/8/8/8/8/8/3q4/K7 b - - 0 1', [], slowLimits);
+        expect(result.evaluation, isNotNull);
+        expect(result.evaluation!, lessThan(-500));
       });
     });
   }
