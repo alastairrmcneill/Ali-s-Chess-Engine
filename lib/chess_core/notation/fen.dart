@@ -1,3 +1,4 @@
+import 'package:ace/chess_core/notation/board_helper.dart';
 import 'package:ace/engines/v1/core/piece.dart';
 import 'package:ace/extensions/string_extension.dart';
 
@@ -88,5 +89,43 @@ class FenPosition {
       halfmoveClock: sections.length > 4 ? int.parse(sections[4]) : 0,
       fullmoveNumber: sections.length > 5 ? int.parse(sections[5]) : 1,
     );
+  }
+
+  /// Writes all 6 FEN fields. `FenPosition.parse(x).toFen() == x` for any well-formed 6-field FEN.
+  String toFen() {
+    final buffer = StringBuffer();
+    for (int row = 0; row < 8; row++) {
+      int empty = 0;
+      for (int file = 0; file < 8; file++) {
+        final piece = position[row * 8 + file];
+        if (piece == Piece.none) {
+          empty++;
+          continue;
+        }
+        if (empty > 0) {
+          buffer.write(empty);
+          empty = 0;
+        }
+        final letter = " kpnbrq"[Piece.type(piece)];
+        buffer.write(Piece.isColor(piece, Piece.white) ? letter.toUpperCase() : letter);
+      }
+      if (empty > 0) buffer.write(empty);
+      if (row != 7) buffer.write('/');
+    }
+
+    buffer.write(whiteToMove ? ' w ' : ' b ');
+
+    final castling = StringBuffer();
+    if (whiteCastleKingSide) castling.write('K');
+    if (whiteCastleQueenSide) castling.write('Q');
+    if (blackCastleKingSide) castling.write('k');
+    if (blackCastleQueenSide) castling.write('q');
+    buffer.write(castling.isEmpty ? '-' : castling.toString());
+
+    buffer.write(' ');
+    buffer.write(enPassantSquare == -1 ? '-' : BoardHelper.squareName(enPassantSquare));
+    buffer.write(' $halfmoveClock $fullmoveNumber');
+
+    return buffer.toString();
   }
 }

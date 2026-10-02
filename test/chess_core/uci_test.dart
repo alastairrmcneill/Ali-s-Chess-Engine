@@ -56,6 +56,14 @@ void main() {
     test('throws on an empty string', () {
       expect(() => UciMove.parse(''), throwsFormatException);
     });
+
+    test('throws on an out-of-range rank', () {
+      expect(() => UciMove.parse('e9e4'), throwsFormatException);
+    });
+
+    test('throws on an out-of-range file', () {
+      expect(() => UciMove.parse('i2i4'), throwsFormatException);
+    });
   });
 
   group('UciMove.toString', () {

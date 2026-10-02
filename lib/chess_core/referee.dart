@@ -12,6 +12,7 @@ class Referee {
   final String startFen;
   final int maxPlies;
   late Board _board;
+  late int _fullMoveNumber;
   final MoveGenerator _moveGenerator = MoveGenerator();
   List<Move>? _legalCache;
   final Map<String, int> _repetitions = {};
@@ -23,11 +24,13 @@ class Referee {
 
   static bool _zobristReady = false;
 
-  Referee(this.startFen, this.maxPlies) {
-    if (_zobristReady) return;
-    Zobrist();
-    _zobristReady = true;
+  Referee(this.startFen, {this.maxPlies = 600}) {
+    if (!_zobristReady) {
+      Zobrist();
+      _zobristReady = true;
+    }
     _board = Board.fromFEN(startFen);
+    _fullMoveNumber = FenPosition.parse(startFen).fullmoveNumber;
     _countRepetition();
   }
 
@@ -36,6 +39,19 @@ class Referee {
   List<String> get sanHistory => _sanHistory;
   bool get whiteToMove => _board.whiteToPlay;
   int get pliesPlayed => _uciHistory.length;
+
+  /// The full 6-field FEN of the current position.
+  String get fen => FenPosition(
+        position: _board.position,
+        whiteCastleKingSide: _board.whiteCastleKingSide,
+        whiteCastleQueenSide: _board.whiteCastleQueenSide,
+        blackCastleKingSide: _board.blackCastleKingSide,
+        blackCastleQueenSide: _board.blackCastleQueenSide,
+        whiteToMove: _board.whiteToPlay,
+        enPassantSquare: _board.enPassantSquare,
+        halfmoveClock: _board.fiftyMoveRule,
+        fullmoveNumber: _fullMoveNumber,
+      ).toFen();
 
   void _countRepetition() {
     final key = _repetitionKey();
@@ -149,7 +165,9 @@ class Referee {
   void _apply(Move move) {
     final uci = _toUci(move);
     final san = San.fromMove(_board, move, _legal());
+    final wasBlack = !_board.whiteToPlay;
     _board.makeMove(move);
+    if (wasBlack) _fullMoveNumber++;
     _legalCache = null;
     _uciHistory.add(uci);
     _sanHistory.add(san);

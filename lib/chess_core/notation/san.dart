@@ -1,8 +1,8 @@
+import 'package:ace/chess_core/notation/board_helper.dart';
 import 'package:ace/chess_core/notation/piece.dart';
 import 'package:ace/chess_core/rules/board.dart';
 import 'package:ace/chess_core/rules/move.dart';
 import 'package:ace/chess_core/rules/move_generator.dart';
-import 'package:ace/referee/rules/board_helper.dart';
 
 class San {
   static const String _pieceLetters = "  PNBRQ"; // Indexed by piece type, king handled separately
