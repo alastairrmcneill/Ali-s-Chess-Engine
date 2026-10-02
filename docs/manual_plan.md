@@ -10,6 +10,36 @@ phases in order. Each one builds on the last and ends with something you can run
 
 ---
 
+## Reference implementation: where it differs from this plan
+
+Branch `claude/practical-goldberg-49zir0` has a working implementation of Phases 1–9 for comparison.
+It follows this plan except for the points below.
+
+| Topic | Plan says | Implementation does |
+|---|---|---|
+| Folders | `lib/match_manager/`, `test/match_manager/` | `lib/match/`, `test/match/` (next to your `opening_book_data.dart`) |
+| Openings | Load a PGN and turn each game into a start FEN (Phase 3) | Uses `opening_book_data.dart`. **Every game starts from the standard position, and the 16 book moves are played first** (marked `{book}` in the PGN). `OpeningBook.standard()` just checks each line with the referee. No PGN reading is needed for openings |
+| FEN writing | `FenPosition.toFen()`, `Referee.fen` | **Not needed, so not implemented.** Engines get the standard start FEN plus the move list. The PGN has no `[FEN]` header. The error log's `position fen … moves …` line reproduces a position |
+| Repetition key | First 4 FEN fields | Built straight from the rules board: squares + side + castling + en passant (en passant only counted when an en passant capture is actually legal, as FIDE says) |
+| Move cap | `maxPlies` from the opening FEN | `--max-moves 300` counts **engine** moves only (600 plies after the book) |
+| Adapter | `adapter.dart`, `AceEngine` | `v1_engine.dart`, `V1Engine` (your naming). Comments are version-neutral, so `dart run tool/snapshot_engine.dart v1 v2` gives a clean `V2Engine` |
+| Evaluation | Side to move's view | `EngineMoveResult.evaluation` is **White's** view. The adapter flips v1's negamax score when Black is to move |
+| PGN reader | Needed for openings | `lib/match/pgn_reader.dart` exists, but it's only used by the PGN round-trip test |
+| Insufficient material | K v K, K+minor v K, KB v KB same colour | Also any number of bishops all on one colour with no other pieces (also a dead position) |
+| `UciMove.parse` | (n/a) | Also rejects squares off the board (`e9e4`), because it's shared by every engine |
+
+How to try it:
+
+```
+flutter test                                               # all tests (about 20s)
+dart run bin/match.dart --a v1 --b random --games 20 --movetime 20
+dart run bin/match.dart --a v1 --b v1 --games 100 --movetime 50
+dart run bin/match.dart --list
+dart run tool/snapshot_engine.dart v1 v2                   # start the next version
+```
+
+---
+
 ## 0. Decisions (from our Q&A)
 
 | Topic                  | Decision                                                                                                                                                   |
