@@ -13,7 +13,7 @@ algorithm/strength — only how the search is driven and what gets recorded abou
     await Future.delayed(Duration.zero);
   }
   ```
-  — yields to the event loop periodically so *something* could interrupt it. But nothing
+  — yields to the event loop periodically so _something_ could interrupt it. But nothing
   ever does: `abortSearch` is only ever set by polling `stopwatch.elapsed` inside `search`
   and `getBestMove` itself, never by an external timer/callback. `Stopwatch.elapsed` is a
   real wall-clock read, independent of whether the isolate yields — so the periodic
@@ -25,7 +25,7 @@ algorithm/strength — only how the search is driven and what gets recorded abou
   move), plus one final summary in `getBestMove`. Across a 1000-game match this is tens of
   thousands of lines to stdout, drowning out the match manager's own progress output and
   slowing the run down (console I/O is not free).
-- Per-move diagnostics that *do* survive today are thin: `EngineMoveResult` only carries
+- Per-move diagnostics that _do_ survive today are thin: `EngineMoveResult` only carries
   `evaluation` and `nodes` (V1Engine never actually sets `depth`, even though `Engine` knows
   the final depth reached — `lib/engines/v1/v1_engine.dart`'s `getMove` just omits it). There
   is no record of the iteration-by-iteration search (what depth 1..N each concluded, how long
@@ -43,6 +43,7 @@ synchronously and returns immediately — no `await` anywhere between "start sea
 "search done".
 
 Steps:
+
 - Delete the `if (stopwatch.elapsedMilliseconds % 10 == 0) { await Future.delayed(...); }`
   block from `search`. Time-based abort keeps working exactly as before: `search` and
   `getBestMove`/`runIterativeDeepening` already check `stopwatch.elapsed >= maxDuration`
@@ -66,7 +67,7 @@ mechanics change from async to sync.
 **Verification:** `perft_all_versions_test.dart` and the existing engine tests must still
 pass unchanged (they don't depend on timing). Worth adding a quick benchmark (run
 `getBestMove` at a fixed movetime before/after, compare `debugInfo.numNodes`) to confirm the
-search explores *more* nodes in the same wall-clock budget once the per-node await overhead
+search explores _more_ nodes in the same wall-clock budget once the per-node await overhead
 is gone — a nice side effect, not a goal.
 
 ## 2. Remove the console logging during search
@@ -74,9 +75,10 @@ is gone — a nice side effect, not a goal.
 **Goal:** zero `print()` calls from inside `Engine` during normal operation.
 
 Steps:
+
 - Delete all 8 `print(...)` statements in `getBestMove` and `runIterativeDeepening`
   (`lib/engines/v1/ai/engine.dart` lines ~46, 61, 74–76, 83–85).
-- Nothing replaces them *in this class* — the data they printed (best move/eval per depth,
+- Nothing replaces them _in this class_ — the data they printed (best move/eval per depth,
   final node counts) is superseded by the structured logging in part 3 below, which captures
   the same information in a form that persists per-move instead of scrolling past in a
   terminal.
@@ -147,7 +149,7 @@ For the detailed per-iteration/PV view, add a sibling per-game log file written 
 `MatchOutput`/`GameRunner` alongside the PGN:
 
 - One line of JSON per game (JSON Lines), e.g. `game_0007.thinking.jsonl`, or a single
-  `thinking.jsonl` with one line per *move* across the whole match, tagged with
+  `thinking.jsonl` with one line per _move_ across the whole match, tagged with
   `gameNumber`/`ply` — either is fine, pick whichever is simpler to append incrementally;
   since bin/match.dart no longer has a per-game hook (see the recent `MatchRunner` simplification
   noted in repo memory), this probably means `GameRecord` needs to carry the full per-move
@@ -155,7 +157,7 @@ For the detailed per-iteration/PV view, add a sibling per-game log file written 
   during the match — check how output is currently wired before picking the exact write
   point.
 - Each line: `{"game": 7, "ply": 23, "side": "white", "move": "e2e4", "depth": 12,
-  "eval": 34, "nodes": 182341, "timeMs": 98, "iterations": [...], "pv": ["e2e4", "e7e5", ...]}`.
+"eval": 34, "nodes": 182341, "timeMs": 98, "iterations": [...], "pv": ["e2e4", "e7e5", ...]}`.
 - This is additive and optional — omit the file entirely for engines that don't supply the
   richer fields, so games played by fakes/simple engines in tests don't need a dummy log.
 
