@@ -10,15 +10,15 @@ enum GameTermination {
   threefoldRepetition,
   fiftyMoveRule,
   insufficientMaterial,
-  maxMoves, // our move cap of 300 moves
-  illegalMove, // our engine returned an illegal move
-  engineError // our engine encountered an error
+  maxMoves, // our move cap
+  illegalMove, // an engine returned a move the referee rejected
+  engineError, // an engine threw or returned no move
 }
 
 class GameEnd {
   final GameOutcome outcome;
   final GameTermination termination;
-  final String? detail;
+  final String? detail; // human-readable, for logs and the PGN
 
   const GameEnd({
     required this.outcome,
@@ -31,4 +31,7 @@ class GameEnd {
         GameOutcome.blackWin => "0-1",
         GameOutcome.draw => "1/2-1/2",
       };
+
+  @override
+  String toString() => '${termination.name} ($pgnResult)${detail == null ? '' : ': $detail'}';
 }

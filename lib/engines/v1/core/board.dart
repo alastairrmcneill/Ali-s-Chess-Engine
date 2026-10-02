@@ -1,6 +1,6 @@
 import 'dart:collection';
 
-import 'package:ace/referee/rules/fen.dart';
+import 'package:ace/chess_core/notation/fen.dart';
 import 'package:ace/engines/v1/core/game_state.dart';
 import 'package:ace/engines/v1/core/move.dart';
 import 'package:ace/engines/v1/core/piece.dart';

@@ -1,10 +1,10 @@
 import 'dart:collection';
 
-import 'package:ace/referee/rules/fen.dart';
-import 'package:ace/engines/v1/core/game_state.dart';
-import 'package:ace/engines/v1/core/move.dart';
-import 'package:ace/engines/v1/core/piece.dart';
-import 'package:ace/referee/rules/zobrist.dart';
+import 'package:ace/chess_core/notation/fen.dart';
+import 'package:ace/chess_core/rules/game_state.dart';
+import 'package:ace/chess_core/rules/move.dart';
+import 'package:ace/chess_core/notation/piece.dart';
+import 'package:ace/chess_core/rules/zobrist.dart';
 
 class Board {
   late List<int> position;
@@ -17,7 +17,6 @@ class Board {
   late List<GameState> gameStateHistory;
   late int fiftyMoveRule;
   late HashMap<int, int> hashHistory = HashMap();
-  late int plyCount;
   late int zobristKey;
 
   Board() : this.fromFEN(FenPosition.startingPosition);
@@ -36,7 +35,6 @@ class Board {
     zobristKey = Zobrist.getZobristForBoard(this);
     gameStateHistory = [];
     fiftyMoveRule = fenPosition.halfmoveClock;
-    plyCount = (fenPosition.fullmoveNumber - 1) * 2 + (whiteToPlay ? 0 : 1);
 
     addMoveToHashHistory(zobristKey);
   }

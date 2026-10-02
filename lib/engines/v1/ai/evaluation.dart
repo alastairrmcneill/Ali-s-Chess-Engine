@@ -2,7 +2,7 @@ import 'dart:math';
 
 import 'package:ace/engines/v1/ai/piece_square_tables.dart';
 import 'package:ace/engines/v1/core/board.dart';
-import 'package:ace/referee/rules/board_helper.dart';
+import 'package:ace/chess_core/notation/board_helper.dart';
 import 'package:ace/engines/v1/core/piece.dart';
 import 'package:ace/engines/v1/core/precompute_data.dart';
 

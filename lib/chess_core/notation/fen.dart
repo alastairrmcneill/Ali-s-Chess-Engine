@@ -1,5 +1,4 @@
-import 'package:ace/engines/v1/core/piece.dart';
-import 'package:ace/extensions/string_extension.dart';
+import 'package:ace/chess_core/notation/piece.dart';
 
 class FenPosition {
   static String startingPosition = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -46,10 +45,10 @@ class FenPosition {
       String char = sections[0][i];
 
       if (char != "/") {
-        if (char.isNumeric()) {
+        if (_isDigit(char)) {
           index += int.parse(char);
         } else {
-          int pieceColor = char.isUpperCase() ? Piece.white : Piece.black;
+          int pieceColor = char == char.toUpperCase() ? Piece.white : Piece.black;
 
           int pieceType = _pieceSymbols[char.toLowerCase()]!;
 
@@ -89,4 +88,6 @@ class FenPosition {
       fullmoveNumber: sections.length > 5 ? int.parse(sections[5]) : 1,
     );
   }
+
+  static bool _isDigit(String char) => '0123456789'.contains(char);
 }

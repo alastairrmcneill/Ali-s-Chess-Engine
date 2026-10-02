@@ -1,5 +1,5 @@
-import 'package:ace/referee/rules/board_helper.dart';
-import 'package:ace/referee/rules/uci.dart';
+import 'package:ace/chess_core/notation/board_helper.dart';
+import 'package:ace/chess_core/notation/uci.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -55,6 +55,11 @@ void main() {
 
     test('throws on an empty string', () {
       expect(() => UciMove.parse(''), throwsFormatException);
+    });
+
+    test('throws on squares off the board', () {
+      expect(() => UciMove.parse('e9e4'), throwsFormatException);
+      expect(() => UciMove.parse('i2i4'), throwsFormatException);
     });
   });
 

@@ -1,4 +1,4 @@
-import 'package:ace/referee/rules/board_helper.dart';
+import 'package:ace/chess_core/notation/board_helper.dart';
 
 class UciMove {
   final int from;
@@ -11,10 +11,16 @@ class UciMove {
     this.promotion,
   });
 
+  static final RegExp _format = RegExp(r'^[a-h][1-8][a-h][1-8][qrbnQRBN]?$');
+
   factory UciMove.parse(String uci) {
-    if (uci.length != 4 && uci.length != 5) throw FormatException("Invalid UCI move", uci);
+    if (!_format.hasMatch(uci)) {
+      if (uci.length == 5 && !"qrbn".contains(uci[4].toLowerCase())) {
+        throw FormatException("Invalid promotion piece", uci);
+      }
+      throw FormatException("Invalid UCI move", uci);
+    }
     String? promotion = uci.length == 5 ? uci[4].toLowerCase() : null;
-    if (promotion != null && !"qrbn".contains(promotion)) throw FormatException("Invalid promotion piece", uci);
     return UciMove(
       from: BoardHelper.squareIndex(uci.substring(0, 2)),
       to: BoardHelper.squareIndex(uci.substring(2, 4)),

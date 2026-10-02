@@ -1,7 +1,7 @@
-import 'package:ace/engines/v1/core/board.dart';
-import 'package:ace/engines/v1/core/move.dart';
-import 'package:ace/engines/v1/core/piece.dart';
-import 'package:ace/engines/v1/core/precompute_data.dart';
+import 'package:ace/chess_core/rules/board.dart';
+import 'package:ace/chess_core/rules/move.dart';
+import 'package:ace/chess_core/notation/piece.dart';
+import 'package:ace/chess_core/rules/precompute_data.dart';
 import 'package:ace/chess_core/notation/board_helper.dart';
 
 class MoveGenerator {
