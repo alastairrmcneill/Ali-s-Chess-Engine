@@ -23,7 +23,7 @@ final _ownLegalMoves = <String, Set<String> Function(String fen, List<String> uc
 };
 
 void main() {
-  for (final id in EngineRegistry.versionIds) {
+  for (final id in EngineRegistry.allIds) {
     group('Engine: $id', () {
       final limits = SearchLimits(moveTime: const Duration(milliseconds: 50));
 

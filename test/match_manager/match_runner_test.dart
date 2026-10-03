@@ -10,7 +10,13 @@ void main() {
     final config = MatchConfig(engineAId: 'illegalA', engineBId: 'illegalB', games: 6);
     final runner = MatchRunner(config);
 
-    final stats = await runner.runMatch(engineA: IllegalEngine(), engineB: IllegalEngine());
+    final stats = await runner.runMatch(
+      engineA: IllegalEngine(),
+      engineB: IllegalEngine(),
+      engineAName: 'IllegalEngine A',
+      engineBName: 'IllegalEngine B',
+      openingBookWarnings: [],
+    );
 
     // Every opening line is 16 plies (even), so White is always the first engine asked to move,
     // and IllegalEngine always forfeits immediately. So whichever engine is White loses.
@@ -29,7 +35,13 @@ void main() {
     final config = MatchConfig(engineAId: 'illegalA', engineBId: 'illegalB', games: 7);
     final runner = MatchRunner(config);
 
-    final stats = await runner.runMatch(engineA: IllegalEngine(), engineB: IllegalEngine());
+    final stats = await runner.runMatch(
+      engineA: IllegalEngine(),
+      engineB: IllegalEngine(),
+      engineAName: 'IllegalEngine A',
+      engineBName: 'IllegalEngine B',
+      openingBookWarnings: [],
+    );
 
     expect(stats.gamesPlayed, 6); // 7 ~/ 2 == 3 pairs == 6 games, the 7th game is dropped
   });

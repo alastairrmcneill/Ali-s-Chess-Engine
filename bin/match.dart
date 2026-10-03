@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:ace/engines/engine_registry.dart';
 import 'package:ace/match/opening_book.dart';
 import 'package:ace/match_manager/match_config.dart';
-import 'package:ace/match_manager/match_output.dart';
 import 'package:ace/match_manager/match_runner.dart';
 import 'package:args/args.dart';
 
@@ -58,21 +57,21 @@ Future<void> main(List<String> arguments) async {
 
   final engineA = EngineRegistry.create(config.engineAId);
   final engineB = EngineRegistry.create(config.engineBId);
-  final output = MatchOutput.create(config, engineAName: engineA.displayName, engineBName: engineB.displayName);
+  final runner = MatchRunner(config);
 
   stdout.writeln('${engineA.displayName} (A) vs ${engineB.displayName} (B): ${config.games} games, '
       '${config.moveTime.inMilliseconds} ms/move, ${book.openings.length} openings');
-  stdout.writeln('Writing results to ${output.directory.path}\n');
+  stdout.writeln('Writing results to match_results/\n');
 
-  final stats = await MatchRunner(config).runMatch(engineA: engineA, engineB: engineB);
-
-  // Standard end-of-match bookkeeping: write the config and both summaries once the match is done.
-  output.writeConfig(openingCount: book.openings.length, warnings: [...book.warnings]);
-  output.writeSummary(stats);
-  output.writeSummaryJson(stats);
+  final stats = await runner.runMatch(
+    engineA: engineA,
+    engineB: engineB,
+    engineAName: engineA.displayName,
+    engineBName: engineB.displayName,
+    openingBookWarnings: book.warnings,
+  );
 
   stdout.writeln('\n${stats.toSummaryText(openingsDescription: 'opening_book_data.dart')}');
-  stdout.writeln('Results: ${output.directory.path}');
   exit(0);
 }
 
