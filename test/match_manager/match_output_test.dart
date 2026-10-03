@@ -1,6 +1,5 @@
 import 'package:ace/match_manager/match_output.dart';
 import 'package:ace/match_manager/match_config.dart';
-import 'package:ace/match_manager/match_stats.dart';
 import 'package:ace/match/game_record.dart';
 import 'package:ace/chess_core/game_end.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,7 +8,7 @@ import 'dart:io';
 void main() {
   group('MatchOutput.create', () {
     test('creates a directory with timestamp and engine IDs', () {
-      final config = MatchConfig(
+      const config = MatchConfig(
         engineAId: 'v1',
         engineBId: 'v2',
       );
@@ -25,8 +24,8 @@ void main() {
     });
 
     test('creates directories for different engine pairs', () {
-      final config1 = MatchConfig(engineAId: 'alpha', engineBId: 'beta');
-      final config2 = MatchConfig(engineAId: 'gamma', engineBId: 'delta');
+      const config1 = MatchConfig(engineAId: 'alpha', engineBId: 'beta');
+      const config2 = MatchConfig(engineAId: 'gamma', engineBId: 'delta');
 
       final output1 = MatchOutput.create(config1, engineAName: 'A', engineBName: 'B');
       final output2 = MatchOutput.create(config2, engineAName: 'C', engineBName: 'D');
@@ -36,7 +35,7 @@ void main() {
     });
 
     test('event name matches engine display names', () {
-      final config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
+      const config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
       final output = MatchOutput.create(
         config,
         engineAName: 'My Engine A',
@@ -49,7 +48,7 @@ void main() {
 
   group('MatchOutput file paths', () {
     test('creates expected file paths in directory', () {
-      final config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
+      const config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
       final output = MatchOutput.create(config, engineAName: 'A', engineBName: 'B');
 
       // Check that directory exists with expected structure
@@ -70,11 +69,11 @@ void main() {
 
   group('MatchOutput.writeConfig', () {
     test('creates config.txt file with match details', () {
-      final config = MatchConfig(
+      const config = MatchConfig(
         engineAId: 'v1',
         engineBId: 'v2',
         games: 100,
-        moveTime: Duration(milliseconds: 500),
+        moveTime: const Duration(milliseconds: 500),
         maxMoves: 200,
       );
       final output = MatchOutput.create(config, engineAName: 'V1', engineBName: 'V2');
@@ -97,7 +96,7 @@ void main() {
     });
 
     test('includes warnings in config.txt when present', () {
-      final config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
+      const config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
       final output = MatchOutput.create(config, engineAName: 'V1', engineBName: 'V2');
 
       final warnings = ['Warning 1', 'Warning 2', 'Warning 3'];
@@ -115,7 +114,7 @@ void main() {
     });
 
     test('omits warnings section when empty', () {
-      final config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
+      const config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
       final output = MatchOutput.create(config, engineAName: 'V1', engineBName: 'V2');
 
       output.writeConfig(openingCount: 500, warnings: []);
@@ -129,7 +128,7 @@ void main() {
     });
 
     test('includes timestamp', () {
-      final config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
+      const config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
       final output = MatchOutput.create(config, engineAName: 'V1', engineBName: 'V2');
 
       output.writeConfig(openingCount: 500, warnings: []);
@@ -145,10 +144,10 @@ void main() {
 
   group('MatchOutput.addGame', () {
     test('appends game to pgn file', () {
-      final config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
+      const config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
       final output = MatchOutput.create(config, engineAName: 'V1', engineBName: 'V2');
 
-      final record = GameRecord(
+      const record = GameRecord(
         gameNumber: 1,
         openingIndex: 0,
         startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -158,11 +157,11 @@ void main() {
         whiteName: 'V1',
         blackName: 'V2',
         engineAIsWhite: true,
-        end: GameEnd(outcome: GameOutcome.whiteWin, termination: GameTermination.checkmate),
+        end: const GameEnd(outcome: GameOutcome.whiteWin, termination: GameTermination.checkmate),
         uciMoves: [],
         sanMoves: [],
         moveStats: [],
-        duration: Duration(seconds: 1),
+        duration: const Duration(seconds: 1),
       );
 
       output.addGame(record);
@@ -177,10 +176,10 @@ void main() {
     });
 
     test('does not log games without errors to errors.log', () {
-      final config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
+      const config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
       final output = MatchOutput.create(config, engineAName: 'V1', engineBName: 'V2');
 
-      final record = GameRecord(
+      const record = GameRecord(
         gameNumber: 1,
         openingIndex: 0,
         startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -190,11 +189,11 @@ void main() {
         whiteName: 'V1',
         blackName: 'V2',
         engineAIsWhite: true,
-        end: GameEnd(outcome: GameOutcome.whiteWin, termination: GameTermination.checkmate),
+        end: const GameEnd(outcome: GameOutcome.whiteWin, termination: GameTermination.checkmate),
         uciMoves: [],
         sanMoves: [],
         moveStats: [],
-        duration: Duration(seconds: 1),
+        duration: const Duration(seconds: 1),
       );
 
       output.addGame(record);
@@ -206,10 +205,10 @@ void main() {
     });
 
     test('logs forfeits to errors.log', () {
-      final config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
+      const config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
       final output = MatchOutput.create(config, engineAName: 'V1', engineBName: 'V2');
 
-      final record = GameRecord(
+      const record = GameRecord(
         gameNumber: 1,
         openingIndex: 0,
         startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -219,7 +218,7 @@ void main() {
         whiteName: 'V1',
         blackName: 'V2',
         engineAIsWhite: true,
-        end: GameEnd(
+        end: const GameEnd(
           outcome: GameOutcome.blackWin,
           termination: GameTermination.illegalMove,
           detail: 'White played illegal move',
@@ -228,7 +227,7 @@ void main() {
         sanMoves: [],
         moveStats: [],
         errorDetail: 'Stack trace info',
-        duration: Duration(seconds: 1),
+        duration: const Duration(seconds: 1),
       );
 
       output.addGame(record);
@@ -247,7 +246,7 @@ void main() {
 
   group('MatchOutput directory management', () {
     test('creates nested directories', () {
-      final config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
+      const config = MatchConfig(engineAId: 'v1', engineBId: 'v2');
       final output = MatchOutput.create(config, engineAName: 'V1', engineBName: 'V2');
 
       expect(output.directory.existsSync(), true);
@@ -256,8 +255,8 @@ void main() {
     });
 
     test('handles multiple matches with different engine IDs', () {
-      final config1 = MatchConfig(engineAId: 'v1', engineBId: 'v2');
-      final config2 = MatchConfig(engineAId: 'v1', engineBId: 'v3');
+      const config1 = MatchConfig(engineAId: 'v1', engineBId: 'v2');
+      const config2 = MatchConfig(engineAId: 'v1', engineBId: 'v3');
 
       final output1 = MatchOutput.create(config1, engineAName: 'V1', engineBName: 'V2');
       final output2 = MatchOutput.create(config2, engineAName: 'V1', engineBName: 'V3');

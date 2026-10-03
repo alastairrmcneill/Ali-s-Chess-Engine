@@ -134,8 +134,8 @@ void main() {
     });
 
     test('all board squares round-trip correctly', () {
-      final files = 'abcdefgh';
-      final ranks = '12345678';
+      const files = 'abcdefgh';
+      const ranks = '12345678';
       for (int i = 0; i < files.length; i++) {
         for (int j = 0; j < ranks.length; j++) {
           final square = '${files[i]}${ranks[j]}';

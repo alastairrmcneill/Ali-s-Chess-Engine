@@ -33,11 +33,11 @@ void main() {
 
     test('formats edge case around mateThreshold', () {
       // 899999999 is below mateThreshold (900000000)
-      final eval = 900000000 - 1; // 899999999
+      const eval = 900000000 - 1; // 899999999
       final formatted = PgnWriter.formatEval(eval);
       expect(formatted, '+8999999.99');
 
-      final negEval = -(900000000 - 1); // -899999999
+      const negEval = -(900000000 - 1); // -899999999
       final negFormatted = PgnWriter.formatEval(negEval);
       expect(negFormatted, '-8999999.99');
     });
@@ -57,7 +57,7 @@ void main() {
     late GameRecord record;
 
     setUp(() {
-      record = GameRecord(
+      record = const GameRecord(
         gameNumber: 1,
         openingIndex: 0,
         startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -84,7 +84,7 @@ void main() {
       final pgn = PgnWriter.gameToPgn(
         record,
         event: 'Test Match',
-        moveTime: Duration(milliseconds: 100),
+        moveTime: const Duration(milliseconds: 100),
       );
       expect(pgn, contains('[Event "Test Match"]'));
       expect(pgn, contains('[Site "ACE match manager"]'));
@@ -97,7 +97,7 @@ void main() {
       final pgn = PgnWriter.gameToPgn(
         record,
         event: 'Test',
-        moveTime: Duration(milliseconds: 100),
+        moveTime: const Duration(milliseconds: 100),
       );
       expect(pgn, contains('[Round "1"]'));
     });
@@ -106,7 +106,7 @@ void main() {
       final pgn = PgnWriter.gameToPgn(
         record,
         event: 'Test',
-        moveTime: Duration(milliseconds: 100),
+        moveTime: const Duration(milliseconds: 100),
       );
       expect(pgn, contains('[Opening "book #1"]'));
     });
@@ -115,7 +115,7 @@ void main() {
       final pgn = PgnWriter.gameToPgn(
         record,
         event: 'Test',
-        moveTime: Duration(milliseconds: 100),
+        moveTime: const Duration(milliseconds: 100),
       );
       expect(pgn, contains('[PlyCount "3"]'));
     });
@@ -124,7 +124,7 @@ void main() {
       final pgn = PgnWriter.gameToPgn(
         record,
         event: 'Test',
-        moveTime: Duration(milliseconds: 100),
+        moveTime: const Duration(milliseconds: 100),
       );
       expect(pgn, contains('[TimeControl "movetime=100ms"]'));
     });
@@ -133,7 +133,7 @@ void main() {
       final pgn = PgnWriter.gameToPgn(
         record,
         event: 'Test',
-        moveTime: Duration(milliseconds: 100),
+        moveTime: const Duration(milliseconds: 100),
       );
       expect(pgn, contains('1.'));
       expect(pgn, contains('e4'));
@@ -144,7 +144,7 @@ void main() {
       final pgn = PgnWriter.gameToPgn(
         record,
         event: 'Test',
-        moveTime: Duration(milliseconds: 100),
+        moveTime: const Duration(milliseconds: 100),
       );
       // First 2 moves (c5) are book moves, should have {book} after 2nd move
       expect(pgn, contains('c5 {book}'));
@@ -154,7 +154,7 @@ void main() {
       final pgn = PgnWriter.gameToPgn(
         record,
         event: 'Test',
-        moveTime: Duration(milliseconds: 100),
+        moveTime: const Duration(milliseconds: 100),
       );
       expect(pgn, contains('{'));
       expect(pgn, contains('100ms'));
@@ -164,7 +164,7 @@ void main() {
       final pgn = PgnWriter.gameToPgn(
         record,
         event: 'Test',
-        moveTime: Duration(milliseconds: 100),
+        moveTime: const Duration(milliseconds: 100),
       );
       expect(pgn, contains('[Termination "checkmate"]'));
     });
@@ -173,13 +173,13 @@ void main() {
       final pgn = PgnWriter.gameToPgn(
         record,
         event: 'Test',
-        moveTime: Duration(milliseconds: 100),
+        moveTime: const Duration(milliseconds: 100),
       );
       expect(pgn, contains('1-0'));
     });
 
     test('handles draw result', () {
-      final drawRecord = GameRecord(
+      const drawRecord = GameRecord(
         gameNumber: 2,
         openingIndex: 1,
         startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -201,14 +201,14 @@ void main() {
       final pgn = PgnWriter.gameToPgn(
         drawRecord,
         event: 'Test',
-        moveTime: Duration(milliseconds: 100),
+        moveTime: const Duration(milliseconds: 100),
       );
       expect(pgn, contains('[Result "1/2-1/2"]'));
       expect(pgn, contains('1/2-1/2'));
     });
 
     test('handles black win', () {
-      final blackWinRecord = GameRecord(
+      const blackWinRecord = GameRecord(
         gameNumber: 3,
         openingIndex: 2,
         startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -230,7 +230,7 @@ void main() {
       final pgn = PgnWriter.gameToPgn(
         blackWinRecord,
         event: 'Test',
-        moveTime: Duration(milliseconds: 100),
+        moveTime: const Duration(milliseconds: 100),
       );
       expect(pgn, contains('[Result "0-1"]'));
       expect(pgn, contains('0-1'));
@@ -241,14 +241,14 @@ void main() {
       final pgn = PgnWriter.gameToPgn(
         record,
         event: 'Test',
-        moveTime: Duration(milliseconds: 100),
+        moveTime: const Duration(milliseconds: 100),
         date: date,
       );
       expect(pgn, contains('[Date "2023.06.15"]'));
     });
 
     test('includes forfeit detail for illegal moves', () {
-      final illegalRecord = GameRecord(
+      const illegalRecord = GameRecord(
         gameNumber: 4,
         openingIndex: 0,
         startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -271,14 +271,14 @@ void main() {
       final pgn = PgnWriter.gameToPgn(
         illegalRecord,
         event: 'Test',
-        moveTime: Duration(milliseconds: 100),
+        moveTime: const Duration(milliseconds: 100),
       );
       expect(pgn, contains('{forfeit:'));
       expect(pgn, contains('Illegal move'));
     });
 
     test('escapes special characters in headers', () {
-      final specialRecord = GameRecord(
+      const specialRecord = GameRecord(
         gameNumber: 5,
         openingIndex: 0,
         startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -300,7 +300,7 @@ void main() {
       final pgn = PgnWriter.gameToPgn(
         specialRecord,
         event: 'Test',
-        moveTime: Duration(milliseconds: 100),
+        moveTime: const Duration(milliseconds: 100),
       );
       expect(pgn, contains('\\'));
     });
@@ -309,7 +309,7 @@ void main() {
   group('PgnWriter move comments', () {
     test('formats move stat with all fields', () {
       // This tests the internal _comment method indirectly
-      final record = GameRecord(
+      const record = GameRecord(
         gameNumber: 1,
         openingIndex: 0,
         startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -331,7 +331,7 @@ void main() {
       final pgn = PgnWriter.gameToPgn(
         record,
         event: 'Test',
-        moveTime: Duration(milliseconds: 100),
+        moveTime: const Duration(milliseconds: 100),
       );
       expect(pgn, contains('{'));
       expect(pgn, contains('123ms'));

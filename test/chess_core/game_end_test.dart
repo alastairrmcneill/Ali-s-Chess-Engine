@@ -29,7 +29,7 @@ void main() {
 
   group('GameEnd', () {
     test('creates with required fields', () {
-      final end = GameEnd(
+      const end = GameEnd(
         outcome: GameOutcome.whiteWin,
         termination: GameTermination.checkmate,
       );
@@ -39,8 +39,8 @@ void main() {
     });
 
     test('creates with optional detail', () {
-      final detail = 'Test detail';
-      final end = GameEnd(
+      const detail = 'Test detail';
+      const end = GameEnd(
         outcome: GameOutcome.whiteWin,
         termination: GameTermination.checkmate,
         detail: detail,
@@ -50,7 +50,7 @@ void main() {
 
     group('pgnResult', () {
       test('returns "1-0" for whiteWin', () {
-        final end = GameEnd(
+        const end = GameEnd(
           outcome: GameOutcome.whiteWin,
           termination: GameTermination.checkmate,
         );
@@ -58,7 +58,7 @@ void main() {
       });
 
       test('returns "0-1" for blackWin', () {
-        final end = GameEnd(
+        const end = GameEnd(
           outcome: GameOutcome.blackWin,
           termination: GameTermination.checkmate,
         );
@@ -66,7 +66,7 @@ void main() {
       });
 
       test('returns "1/2-1/2" for draw', () {
-        final end = GameEnd(
+        const end = GameEnd(
           outcome: GameOutcome.draw,
           termination: GameTermination.stalemate,
         );
@@ -76,7 +76,7 @@ void main() {
 
     group('toString', () {
       test('includes outcome, termination, and detail', () {
-        final end = GameEnd(
+        const end = GameEnd(
           outcome: GameOutcome.whiteWin,
           termination: GameTermination.checkmate,
           detail: 'Black king mated',
@@ -91,7 +91,7 @@ void main() {
       });
 
       test('handles null detail gracefully', () {
-        final end = GameEnd(
+        const end = GameEnd(
           outcome: GameOutcome.whiteWin,
           termination: GameTermination.checkmate,
         );

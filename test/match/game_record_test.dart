@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('MoveStat', () {
     test('creates with all fields', () {
-      final stat = MoveStat(100, 20, 50000, 50);
+      const stat = MoveStat(100, 20, 50000, 50);
       expect(stat.timeMs, 100);
       expect(stat.depth, 20);
       expect(stat.nodes, 50000);
@@ -13,7 +13,7 @@ void main() {
     });
 
     test('creates with null optional fields', () {
-      final stat = MoveStat(200, null, null, null);
+      const stat = MoveStat(200, null, null, null);
       expect(stat.timeMs, 200);
       expect(stat.depth, isNull);
       expect(stat.nodes, isNull);
@@ -21,7 +21,7 @@ void main() {
     });
 
     test('toString includes all fields', () {
-      final stat = MoveStat(150, 25, 100000, -30);
+      const stat = MoveStat(150, 25, 100000, -30);
       final str = stat.toString();
       expect(str, contains('timeMs: 150'));
       expect(str, contains('depth: 25'));
@@ -30,12 +30,12 @@ void main() {
     });
 
     test('handles negative evaluation', () {
-      final stat = MoveStat(50, 15, 30000, -100);
+      const stat = MoveStat(50, 15, 30000, -100);
       expect(stat.evaluation, -100);
     });
 
     test('handles large node counts', () {
-      final stat = MoveStat(500, 30, 10000000, 0);
+      const stat = MoveStat(500, 30, 10000000, 0);
       expect(stat.nodes, 10000000);
     });
   });
@@ -44,7 +44,7 @@ void main() {
     late GameRecord record;
 
     setUp(() {
-      record = GameRecord(
+      record = const GameRecord(
         gameNumber: 1,
         openingIndex: 0,
         startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -54,14 +54,14 @@ void main() {
         whiteName: 'Engine V1',
         blackName: 'Engine V2',
         engineAIsWhite: true,
-        end: GameEnd(
+        end: const GameEnd(
           outcome: GameOutcome.whiteWin,
           termination: GameTermination.checkmate,
         ),
         uciMoves: ['e2e4', 'c7c5', 'g1f3'],
         sanMoves: ['e4', 'c5', 'Nf3'],
-        moveStats: [MoveStat(100, 20, 50000, 50)],
-        duration: Duration(seconds: 5),
+        moveStats: [const MoveStat(100, 20, 50000, 50)],
+        duration: const Duration(seconds: 5),
       );
     });
 
@@ -78,7 +78,7 @@ void main() {
     });
 
     test('stores error detail when present', () {
-      final errorRecord = GameRecord(
+      const errorRecord = GameRecord(
         gameNumber: 2,
         openingIndex: 1,
         startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -88,7 +88,7 @@ void main() {
         whiteName: 'Engine V1',
         blackName: 'Engine V2',
         engineAIsWhite: true,
-        end: GameEnd(
+        end: const GameEnd(
           outcome: GameOutcome.blackWin,
           termination: GameTermination.illegalMove,
           detail: 'Engine returned illegal move: a1a1',
@@ -97,7 +97,7 @@ void main() {
         sanMoves: const [],
         moveStats: const [],
         errorDetail: 'Stack trace here',
-        duration: Duration(seconds: 1),
+        duration: const Duration(seconds: 1),
       );
       expect(errorRecord.errorDetail, 'Stack trace here');
     });
@@ -115,7 +115,7 @@ void main() {
 
       test('engineMoveIsWhite is true when bookPlies is even', () {
         // Even bookPlies: white makes first engine move
-        final rec = GameRecord(
+        const rec = GameRecord(
           gameNumber: 1,
           openingIndex: 0,
           startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -125,21 +125,21 @@ void main() {
           whiteName: 'Engine V1',
           blackName: 'Engine V2',
           engineAIsWhite: true,
-          end: GameEnd(
+          end: const GameEnd(
             outcome: GameOutcome.whiteWin,
             termination: GameTermination.checkmate,
           ),
           uciMoves: [],
           sanMoves: [],
           moveStats: [],
-          duration: Duration(seconds: 1),
+          duration: const Duration(seconds: 1),
         );
         expect(rec.engineMoveIsWhite(0), true);
       });
 
       test('engineMoveIsWhite is false when bookPlies is odd', () {
         // Odd bookPlies: black makes first engine move
-        final rec = GameRecord(
+        const rec = GameRecord(
           gameNumber: 1,
           openingIndex: 0,
           startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -149,14 +149,14 @@ void main() {
           whiteName: 'Engine V1',
           blackName: 'Engine V2',
           engineAIsWhite: true,
-          end: GameEnd(
+          end: const GameEnd(
             outcome: GameOutcome.whiteWin,
             termination: GameTermination.checkmate,
           ),
           uciMoves: [],
           sanMoves: [],
           moveStats: [],
-          duration: Duration(seconds: 1),
+          duration: const Duration(seconds: 1),
         );
         expect(rec.engineMoveIsWhite(0), false);
       });
@@ -171,7 +171,7 @@ void main() {
 
     group('game properties', () {
       test('tracks game number', () {
-        final rec1 = GameRecord(
+        const rec1 = GameRecord(
           gameNumber: 1,
           openingIndex: 0,
           startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -181,16 +181,16 @@ void main() {
           whiteName: 'V1',
           blackName: 'V2',
           engineAIsWhite: true,
-          end: GameEnd(
+          end: const GameEnd(
             outcome: GameOutcome.whiteWin,
             termination: GameTermination.checkmate,
           ),
           uciMoves: [],
           sanMoves: [],
           moveStats: [],
-          duration: Duration(seconds: 1),
+          duration: const Duration(seconds: 1),
         );
-        final rec100 = GameRecord(
+        const rec100 = GameRecord(
           gameNumber: 100,
           openingIndex: 0,
           startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -200,21 +200,21 @@ void main() {
           whiteName: 'V1',
           blackName: 'V2',
           engineAIsWhite: true,
-          end: GameEnd(
+          end: const GameEnd(
             outcome: GameOutcome.whiteWin,
             termination: GameTermination.checkmate,
           ),
           uciMoves: [],
           sanMoves: [],
           moveStats: [],
-          duration: Duration(seconds: 1),
+          duration: const Duration(seconds: 1),
         );
         expect(rec1.gameNumber, 1);
         expect(rec100.gameNumber, 100);
       });
 
       test('tracks opening index', () {
-        final rec = GameRecord(
+        const rec = GameRecord(
           gameNumber: 1,
           openingIndex: 42,
           startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -224,20 +224,20 @@ void main() {
           whiteName: 'V1',
           blackName: 'V2',
           engineAIsWhite: true,
-          end: GameEnd(
+          end: const GameEnd(
             outcome: GameOutcome.whiteWin,
             termination: GameTermination.checkmate,
           ),
           uciMoves: [],
           sanMoves: [],
           moveStats: [],
-          duration: Duration(seconds: 1),
+          duration: const Duration(seconds: 1),
         );
         expect(rec.openingIndex, 42);
       });
 
       test('tracks duration', () {
-        final rec = GameRecord(
+        const rec = GameRecord(
           gameNumber: 1,
           openingIndex: 0,
           startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -247,14 +247,14 @@ void main() {
           whiteName: 'V1',
           blackName: 'V2',
           engineAIsWhite: true,
-          end: GameEnd(
+          end: const GameEnd(
             outcome: GameOutcome.whiteWin,
             termination: GameTermination.checkmate,
           ),
           uciMoves: [],
           sanMoves: [],
           moveStats: [],
-          duration: Duration(minutes: 5, seconds: 30),
+          duration: const Duration(minutes: 5, seconds: 30),
         );
         expect(rec.duration.inMilliseconds, 330000);
       });
@@ -267,7 +267,7 @@ void main() {
     });
 
     test('handles empty move lists', () {
-      final rec = GameRecord(
+      const rec = GameRecord(
         gameNumber: 1,
         openingIndex: 0,
         startFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -277,14 +277,14 @@ void main() {
         whiteName: 'V1',
         blackName: 'V2',
         engineAIsWhite: true,
-        end: GameEnd(
+        end: const GameEnd(
           outcome: GameOutcome.draw,
           termination: GameTermination.threefoldRepetition,
         ),
         uciMoves: [],
         sanMoves: [],
         moveStats: [],
-        duration: Duration(milliseconds: 100),
+        duration: const Duration(milliseconds: 100),
       );
       expect(rec.uciMoves.length, 0);
       expect(rec.sanMoves.length, 0);

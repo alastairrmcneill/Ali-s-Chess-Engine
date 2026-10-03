@@ -32,7 +32,7 @@ void main() {
   });
 
   test('an odd games count is rounded down to a whole number of pairs', () async {
-    final config = MatchConfig(engineAId: 'illegalA', engineBId: 'illegalB', games: 7);
+    const config = MatchConfig(engineAId: 'illegalA', engineBId: 'illegalB', games: 7);
     final runner = MatchRunner(config);
 
     final stats = await runner.runMatch(

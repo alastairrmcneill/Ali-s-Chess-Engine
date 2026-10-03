@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('MatchConfig', () {
     test('creates with required engine IDs', () {
-      final config = MatchConfig(
+      const config = MatchConfig(
         engineAId: 'v1',
         engineBId: 'v2',
       );
@@ -13,17 +13,17 @@ void main() {
     });
 
     test('uses default values when not provided', () {
-      final config = MatchConfig(
+      const config = MatchConfig(
         engineAId: 'v1',
         engineBId: 'v2',
       );
       expect(config.games, 1000);
-      expect(config.moveTime, Duration(milliseconds: 100));
+      expect(config.moveTime, const Duration(milliseconds: 100));
       expect(config.maxMoves, 300);
     });
 
     test('can override default games', () {
-      final config = MatchConfig(
+      const config = MatchConfig(
         engineAId: 'v1',
         engineBId: 'v2',
         games: 100,
@@ -32,16 +32,16 @@ void main() {
     });
 
     test('can override default moveTime', () {
-      final config = MatchConfig(
+      const config = MatchConfig(
         engineAId: 'v1',
         engineBId: 'v2',
-        moveTime: Duration(milliseconds: 500),
+        moveTime: const Duration(milliseconds: 500),
       );
-      expect(config.moveTime, Duration(milliseconds: 500));
+      expect(config.moveTime, const Duration(milliseconds: 500));
     });
 
     test('can override default maxMoves', () {
-      final config = MatchConfig(
+      const config = MatchConfig(
         engineAId: 'v1',
         engineBId: 'v2',
         maxMoves: 150,
@@ -50,23 +50,23 @@ void main() {
     });
 
     test('can override all values', () {
-      final config = MatchConfig(
+      const config = MatchConfig(
         engineAId: 'engineA',
         engineBId: 'engineB',
         games: 50,
-        moveTime: Duration(milliseconds: 1000),
+        moveTime: const Duration(milliseconds: 1000),
         maxMoves: 200,
       );
       expect(config.engineAId, 'engineA');
       expect(config.engineBId, 'engineB');
       expect(config.games, 50);
-      expect(config.moveTime, Duration(milliseconds: 1000));
+      expect(config.moveTime, const Duration(milliseconds: 1000));
       expect(config.maxMoves, 200);
     });
 
     group('maxPlies calculation', () {
       test('maxPlies is exactly maxMoves * 2', () {
-        final config = MatchConfig(
+        const config = MatchConfig(
           engineAId: 'v1',
           engineBId: 'v2',
           maxMoves: 300,
@@ -75,7 +75,7 @@ void main() {
       });
 
       test('maxPlies updates with custom maxMoves', () {
-        final config = MatchConfig(
+        const config = MatchConfig(
           engineAId: 'v1',
           engineBId: 'v2',
           maxMoves: 150,
@@ -84,7 +84,7 @@ void main() {
       });
 
       test('maxPlies for small maxMoves', () {
-        final config = MatchConfig(
+        const config = MatchConfig(
           engineAId: 'v1',
           engineBId: 'v2',
           maxMoves: 1,
@@ -93,7 +93,7 @@ void main() {
       });
 
       test('maxPlies for large maxMoves', () {
-        final config = MatchConfig(
+        const config = MatchConfig(
           engineAId: 'v1',
           engineBId: 'v2',
           maxMoves: 1000,
@@ -104,8 +104,8 @@ void main() {
 
     group('engine IDs', () {
       test('stores different engine combinations', () {
-        final config1 = MatchConfig(engineAId: 'v1', engineBId: 'v2');
-        final config2 = MatchConfig(engineAId: 'v2', engineBId: 'v3');
+        const config1 = MatchConfig(engineAId: 'v1', engineBId: 'v2');
+        const config2 = MatchConfig(engineAId: 'v2', engineBId: 'v3');
         expect(config1.engineAId, 'v1');
         expect(config1.engineBId, 'v2');
         expect(config2.engineAId, 'v2');
@@ -113,7 +113,7 @@ void main() {
       });
 
       test('engine IDs can be the same (self-play)', () {
-        final config = MatchConfig(engineAId: 'v1', engineBId: 'v1');
+        const config = MatchConfig(engineAId: 'v1', engineBId: 'v1');
         expect(config.engineAId, 'v1');
         expect(config.engineBId, 'v1');
       });
@@ -121,7 +121,7 @@ void main() {
 
     group('games configuration', () {
       test('supports very small number of games', () {
-        final config = MatchConfig(
+        const config = MatchConfig(
           engineAId: 'v1',
           engineBId: 'v2',
           games: 1,
@@ -130,7 +130,7 @@ void main() {
       });
 
       test('supports large number of games', () {
-        final config = MatchConfig(
+        const config = MatchConfig(
           engineAId: 'v1',
           engineBId: 'v2',
           games: 10000,
@@ -139,7 +139,7 @@ void main() {
       });
 
       test('supports even number of games', () {
-        final config = MatchConfig(
+        const config = MatchConfig(
           engineAId: 'v1',
           engineBId: 'v2',
           games: 1000,
@@ -149,7 +149,7 @@ void main() {
       });
 
       test('supports odd number of games', () {
-        final config = MatchConfig(
+        const config = MatchConfig(
           engineAId: 'v1',
           engineBId: 'v2',
           games: 999,
@@ -161,37 +161,37 @@ void main() {
 
     group('move time configuration', () {
       test('supports millisecond precision', () {
-        final config = MatchConfig(
+        const config = MatchConfig(
           engineAId: 'v1',
           engineBId: 'v2',
-          moveTime: Duration(milliseconds: 50),
+          moveTime: const Duration(milliseconds: 50),
         );
         expect(config.moveTime.inMilliseconds, 50);
       });
 
       test('supports second-based duration', () {
-        final config = MatchConfig(
+        const config = MatchConfig(
           engineAId: 'v1',
           engineBId: 'v2',
-          moveTime: Duration(seconds: 1),
+          moveTime: const Duration(seconds: 1),
         );
         expect(config.moveTime.inMilliseconds, 1000);
       });
 
       test('supports long time controls', () {
-        final config = MatchConfig(
+        const config = MatchConfig(
           engineAId: 'v1',
           engineBId: 'v2',
-          moveTime: Duration(seconds: 60),
+          moveTime: const Duration(seconds: 60),
         );
         expect(config.moveTime.inMilliseconds, 60000);
       });
 
       test('supports very fast blitz', () {
-        final config = MatchConfig(
+        const config = MatchConfig(
           engineAId: 'v1',
           engineBId: 'v2',
-          moveTime: Duration(milliseconds: 10),
+          moveTime: const Duration(milliseconds: 10),
         );
         expect(config.moveTime.inMilliseconds, 10);
       });
@@ -224,11 +224,11 @@ void main() {
 
     group('real-world configs', () {
       test('quick blitz match config', () {
-        final config = MatchConfig(
+        const config = MatchConfig(
           engineAId: 'v1',
           engineBId: 'v2',
           games: 100,
-          moveTime: Duration(milliseconds: 50),
+          moveTime: const Duration(milliseconds: 50),
           maxMoves: 300,
         );
         expect(config.games, 100);
@@ -237,11 +237,11 @@ void main() {
       });
 
       test('long classical match config', () {
-        final config = MatchConfig(
+        const config = MatchConfig(
           engineAId: 'v1',
           engineBId: 'v2',
           games: 10,
-          moveTime: Duration(seconds: 60),
+          moveTime: const Duration(seconds: 60),
           maxMoves: 500,
         );
         expect(config.games, 10);
@@ -250,11 +250,11 @@ void main() {
       });
 
       test('self-play config', () {
-        final config = MatchConfig(
+        const config = MatchConfig(
           engineAId: 'v2',
           engineBId: 'v2',
           games: 1000,
-          moveTime: Duration(milliseconds: 200),
+          moveTime: const Duration(milliseconds: 200),
           maxMoves: 300,
         );
         expect(config.engineAId, config.engineBId);
