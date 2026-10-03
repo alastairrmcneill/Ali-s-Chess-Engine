@@ -1,7 +1,7 @@
+import 'package:ace/chess_core/rules/board.dart';
+import 'package:ace/chess_core/rules/move_generator.dart';
 import 'package:ace/engines/engine_interface.dart';
 import 'package:ace/engines/engine_registry.dart';
-import 'package:ace/engines/v1/core/board.dart';
-import 'package:ace/engines/v1/core/move_generator.dart';
 import 'package:ace/engines/v1/v1_engine.dart';
 import 'package:ace/chess_core/notation/fen.dart';
 import 'package:flutter_test/flutter_test.dart';
