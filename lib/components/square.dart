@@ -1,117 +1,97 @@
-import 'package:ace/chess_engine/core/piece.dart';
+import 'package:ace/components/piece_image.dart';
+import 'package:ace/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 class Square extends StatelessWidget {
   final int index;
-  final bool isWhite;
+  final double size;
+  final bool isLight;
   final int piece;
   final bool isSelected;
-  final bool isDraggable;
-  final bool isSquareValid;
   final bool isLastMove;
-  final Function() onTap;
-  final Function() onDragStarted;
-  final Function() onDragComplete;
-  final Function(Velocity, Offset) onDragableCancelled;
+  final bool isMoveTarget;
+  final bool isDraggable;
+  final String? fileLabel;
+  final String? rankLabel;
+  final VoidCallback onTap;
+  final VoidCallback onDragStarted;
 
   const Square({
     super.key,
     required this.index,
-    required this.isWhite,
+    required this.size,
+    required this.isLight,
     required this.piece,
     required this.isSelected,
-    required this.isDraggable,
-    required this.isSquareValid,
     required this.isLastMove,
+    required this.isMoveTarget,
+    required this.isDraggable,
     required this.onTap,
     required this.onDragStarted,
-    required this.onDragComplete,
-    required this.onDragableCancelled,
+    this.fileLabel,
+    this.rankLabel,
   });
 
-  final Color lightSquareColor = const Color.fromRGBO(238, 238, 213, 1);
-  final Color darkSquareColor = const Color.fromRGBO(124, 149, 93, 1);
-  final Color lightSquareSelectedColor = const Color.fromARGB(255, 241, 241, 150);
-  final Color darkSquareSelectedColor = const Color.fromARGB(255, 183, 215, 57);
   @override
   Widget build(BuildContext context) {
+    final base = isLight ? AppTheme.lightSquare : AppTheme.darkSquare;
+    final labelStyle = TextStyle(
+      fontSize: size * 0.18,
+      fontWeight: FontWeight.w600,
+      color: isLight ? AppTheme.darkSquare : AppTheme.lightSquare,
+    );
+
+    final pieceWidget = SizedBox(width: size, height: size, child: pieceImage(piece));
+
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: isSelected || isLastMove
-              ? isWhite
-                  ? lightSquareSelectedColor
-                  : darkSquareSelectedColor
-              : isWhite
-                  ? lightSquareColor
-                  : darkSquareColor,
-        ),
-        child: isDraggable
-            ? Draggable<int>(
-                data: piece,
-                onDraggableCanceled: onDragableCancelled,
-                feedback: SizedBox(
-                  width: MediaQuery.of(context).size.width / 8,
-                  height: MediaQuery.of(context).size.width / 8,
-                  child: piece == 0 ? null : Piece.getImg(piece),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          children: [
+            Positioned.fill(child: ColoredBox(color: base)),
+            if (isSelected || isLastMove) const Positioned.fill(child: ColoredBox(color: AppTheme.highlight)),
+            if (rankLabel != null)
+              Positioned(left: size * 0.05, top: size * 0.03, child: Text(rankLabel!, style: labelStyle)),
+            if (fileLabel != null)
+              Positioned(right: size * 0.06, bottom: size * 0.02, child: Text(fileLabel!, style: labelStyle)),
+            if (isMoveTarget && piece == 0)
+              Center(
+                child: Container(
+                  width: size * 0.28,
+                  height: size * 0.28,
+                  decoration: const BoxDecoration(shape: BoxShape.circle, color: AppTheme.moveHint),
                 ),
-                onDragStarted: onDragStarted,
-                childWhenDragging: Container(
+              ),
+            if (isMoveTarget && piece != 0)
+              Positioned.fill(
+                child: Container(
+                  margin: EdgeInsets.all(size * 0.04),
                   decoration: BoxDecoration(
-                    color: isWhite ? lightSquareSelectedColor : darkSquareSelectedColor,
-                  ),
-                ),
-                onDragCompleted: onDragComplete,
-                child: Center(
-                  child: SizedBox(
-                    width: MediaQuery.of(context).size.width / 8,
-                    height: MediaQuery.of(context).size.width / 8,
-                    child: piece == 0 ? const SizedBox() : Piece.getImg(piece),
-                  ),
-                ),
-              )
-            : Center(
-                child: SizedBox(
-                  width: MediaQuery.of(context).size.width / 8,
-                  height: MediaQuery.of(context).size.width / 8,
-                  child: Stack(
-                    children: [
-                      Text(index.toString()),
-                      piece == 0
-                          ? isSquareValid
-                              ? Stack(
-                                  children: [
-                                    Text(index.toString()),
-                                    Container(
-                                      margin: const EdgeInsets.all(15),
-                                      decoration: const BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : const SizedBox()
-                          : Stack(
-                              children: [
-                                Text(index.toString()),
-                                Piece.getImg(piece),
-                                isSquareValid
-                                    ? Container(
-                                        margin: const EdgeInsets.all(2),
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(100),
-                                          border: Border.all(width: 5, color: Colors.grey.withOpacity(0.7)),
-                                        ),
-                                      )
-                                    : const SizedBox(),
-                              ],
-                            ),
-                    ],
+                    shape: BoxShape.circle,
+                    border: Border.all(width: size * 0.07, color: AppTheme.moveHint),
                   ),
                 ),
               ),
+            if (piece != 0)
+              Positioned.fill(
+                child: isDraggable
+                    ? Draggable<int>(
+                        data: index,
+                        dragAnchorStrategy: pointerDragAnchorStrategy,
+                        onDragStarted: onDragStarted,
+                        feedback: Transform.translate(
+                          offset: Offset(-size * 0.6, -size * 0.6),
+                          child: SizedBox(width: size * 1.2, height: size * 1.2, child: pieceImage(piece)),
+                        ),
+                        childWhenDragging: const SizedBox.shrink(),
+                        child: pieceWidget,
+                      )
+                    : pieceWidget,
+              ),
+          ],
+        ),
       ),
     );
   }
