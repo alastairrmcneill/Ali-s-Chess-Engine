@@ -49,6 +49,7 @@ class StatsPanel extends StatelessWidget {
       ('Positions evaluated', value(stats == null ? null : _count(stats.evaluations))),
       ('Max Q depth', value(stats == null ? null : '${stats.maxQDepth} ply')),
     ];
+    final iterations = game.iterations;
 
     return Card(
       child: Padding(
@@ -76,6 +77,21 @@ class StatsPanel extends StatelessWidget {
                 );
               },
             ),
+            if (stats != null && stats.pv.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _Tile('Principal variation', stats.pv.join(' ')),
+            ],
+            if (iterations.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text('Iterations', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              const SizedBox(height: 2),
+              for (final i in iterations.reversed)
+                Text(
+                  'd${i.depth}  ${i.bestMove == null ? '-' : _eval(game.playerIsWhite ? -(i.eval ?? 0) : (i.eval ?? 0))}  '
+                  '${i.bestMove ?? '-'}  ${i.elapsed.inMilliseconds}ms${i.aborted ? '  (aborted)' : ''}',
+                  style: theme.textTheme.bodySmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+                ),
+            ],
           ],
         ),
       ),

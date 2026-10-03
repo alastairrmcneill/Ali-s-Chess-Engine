@@ -7,7 +7,9 @@ class MoveStat {
   final int? nodes;
   final int? evaluation; // positive = good for White
 
-  const MoveStat(this.timeMs, this.depth, this.nodes, this.evaluation);
+  final List<String>? pv; // the line (UCI) the engine expected to be played
+
+  const MoveStat(this.timeMs, this.depth, this.nodes, this.evaluation, {this.pv});
 
   @override
   String toString() {

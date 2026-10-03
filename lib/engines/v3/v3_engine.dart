@@ -1,22 +1,22 @@
 import 'package:ace/chess_core/notation/uci.dart';
 import 'package:ace/engines/engine_interface.dart';
-import 'package:ace/engines/v2/core/move.dart';
-import 'package:ace/engines/v2/ai/engine.dart';
-import 'package:ace/engines/v2/core/board.dart';
-import 'package:ace/engines/v2/core/move_generator.dart';
-import 'package:ace/engines/v2/core/zobrist.dart';
+import 'package:ace/engines/v3/core/move.dart';
+import 'package:ace/engines/v3/ai/engine.dart';
+import 'package:ace/engines/v3/core/board.dart';
+import 'package:ace/engines/v3/core/move_generator.dart';
+import 'package:ace/engines/v3/core/zobrist.dart';
 
-class V2Engine implements ChessEngine {
+class V3Engine implements ChessEngine {
   @override
-  String get id => 'v2';
+  String get id => 'v3';
 
   @override
-  String get displayName => 'V2 Engine';
+  String get displayName => 'V3 Engine (negamax)';
 
   static bool _zobristReady = false;
   late Engine _engine;
 
-  V2Engine() {
+  V3Engine() {
     _initZobrist();
     _engine = Engine();
   }
@@ -51,47 +51,40 @@ class V2Engine implements ChessEngine {
         }
       }
       if (legalMove == null) {
-        throw StateError('v2 move generator does not consider "$uciMove" a legal move');
+        throw StateError('v3 move generator does not consider "$uciMove" a legal move');
       }
       board.makeMove(legalMove);
     }
 
-    final bestMove = _engine.getBestMove(
-      board,
-      limits.moveTime.inMilliseconds,
-      onIteration: onIteration == null ? null : (iteration) => onIteration(_toStats(iteration)),
-    );
+    final stopwatch = Stopwatch()..start();
+    final bestMove = _engine.getBestMove(board);
 
     if (bestMove == null) {
       throw Exception('No valid move found');
     }
 
-    final completed = _engine.searchLog.where((i) => !i.aborted);
-    // The move played comes from the last step that produced one, which may be an aborted step.
-    final played = _engine.searchLog.where((i) => i.bestMove != null);
+    // No iterative deepening, so the single "iteration" is the whole search. This is what the app shows.
+    onIteration?.call(SearchStats(
+      depth: _engine.depth,
+      nodes: _engine.nodes,
+      qNodes: 0,
+      transpositions: 0,
+      maxQDepth: 0,
+      evaluations: _engine.evaluations,
+      eval: _engine.bestEval,
+      bestMove: moveToUci(bestMove),
+      pv: _engine.principalVariation.map(moveToUci).toList(),
+      elapsed: stopwatch.elapsed,
+    ));
 
     return EngineMoveResult(
       uciMove: moveToUci(bestMove),
       evaluation: _engine.bestEval,
-      depth: completed.isEmpty ? null : completed.last.depth,
-      nodes: _engine.debugInfo.numNodes + _engine.debugInfo.numQNodes,
-      principalVariation: played.isEmpty ? null : played.last.pv.map(moveToUci).toList(),
+      depth: _engine.depth,
+      nodes: _engine.nodes,
+      principalVariation: _engine.principalVariation.map(moveToUci).toList(),
     );
   }
-
-  SearchStats _toStats(SearchIteration i) => SearchStats(
-        depth: i.depth,
-        nodes: i.nodes,
-        qNodes: i.qNodes,
-        transpositions: i.transpositions,
-        maxQDepth: i.maxQDepth,
-        evaluations: i.evaluations,
-        eval: i.eval,
-        bestMove: i.bestMove == null ? null : moveToUci(i.bestMove!),
-        pv: i.pv.map(moveToUci).toList(),
-        elapsed: Duration(milliseconds: i.elapsedMs),
-        aborted: i.aborted,
-      );
 
   @override
   int perft(String fen, int depth) {

@@ -28,8 +28,8 @@ class GameRunner {
       if (reason != null) throw Exception('Invalid opening move: $move, reason: $reason');
     }
 
-    await white.newGame();
-    await black.newGame();
+    white.newGame();
+    black.newGame();
 
     GameRecord record(GameEnd end, [String? errorDetail]) => GameRecord(
           gameNumber: gameNumber,
@@ -61,7 +61,7 @@ class GameRunner {
       EngineMoveResult result;
 
       try {
-        result = await mover.getMove(
+        result = mover.getMove(
           fen,
           referee.uciHistory,
           searchLimits,
@@ -87,6 +87,7 @@ class GameRunner {
           result.depth,
           result.nodes,
           result.evaluation,
+          pv: result.principalVariation,
         ),
       );
     }

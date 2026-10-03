@@ -5,7 +5,7 @@ import 'package:ace/services/engine_worker.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('worker streams live stats from v2 and returns a move', () async {
+  test('worker streams one event per iterative deepening step from v2 and returns a move', () async {
     final worker = await EngineWorker.spawn('v2');
     final stats = <SearchStats>[];
     final sub = worker.stats.listen(stats.add);
@@ -16,10 +16,12 @@ void main() {
     worker.dispose();
 
     expect(result.uciMove, matches(RegExp(r'^[a-h][1-8][a-h][1-8][qrbn]?$')));
-    expect(stats.length, greaterThan(2), reason: 'expected periodic stats during the search');
+    expect(stats.length, greaterThan(2), reason: 'expected one event per iteration');
+    expect(stats.map((s) => s.depth).toList(), orderedEquals([for (var d = 1; d <= stats.length; d++) d]));
     expect(stats.last.nodes + stats.last.qNodes, greaterThan(0));
-    expect(stats.last.depth, greaterThan(0));
-    expect(stats.last.elapsed, greaterThan(Duration.zero));
+    expect(stats.first.pv, isNotEmpty);
+    expect(result.principalVariation!.first, result.uciMove);
+    expect(result.depth, greaterThan(0));
   });
 
   test('v0 reports no stats', () async {

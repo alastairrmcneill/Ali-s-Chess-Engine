@@ -4,10 +4,11 @@ import 'dart:io';
 import 'package:ace/chess_core/game_end.dart';
 import 'package:ace/match/game_record.dart';
 import 'package:ace/match/pgn_writer.dart';
+import 'package:ace/match/thinking_log.dart';
 import 'package:ace/match_manager/match_config.dart';
 import 'package:ace/match_manager/match_stats.dart';
 
-/// Writes a match's results folder: config.txt, games.pgn, errors.log, summary.txt, summary.json.
+/// Writes a match's results folder: config.txt, games.pgn, thinking.jsonl (engines that report it), errors.log, summary.txt, summary.json.
 class MatchOutput {
   final Directory directory;
   final MatchConfig config;
@@ -25,6 +26,7 @@ class MatchOutput {
   }
 
   File get _pgn => File('${directory.path}/games.pgn');
+  File get _thinking => File('${directory.path}/thinking.jsonl');
   File get _errors => File('${directory.path}/errors.log');
 
   void writeConfig({required int openingCount, required List<String> warnings}) {
@@ -52,6 +54,11 @@ class MatchOutput {
   void addGame(GameRecord record) {
     _pgn.writeAsStringSync('${PgnWriter.gameToPgn(record, event: event, moveTime: config.moveTime)}\n',
         mode: FileMode.append);
+
+    final thinking = ThinkingLog.linesForGame(record);
+    if (thinking.isNotEmpty) {
+      _thinking.writeAsStringSync('${thinking.join('\n')}\n', mode: FileMode.append);
+    }
 
     final forfeit =
         record.end.termination == GameTermination.illegalMove || record.end.termination == GameTermination.engineError;

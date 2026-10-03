@@ -13,6 +13,9 @@ class TranspositionTable {
     _table[entry.zobristHash] = entry;
   }
 
+  /// Raw lookup with no depth or bound checks. Read-only diagnostics (principal variation), never used to search.
+  TranspositionTableEntry? peek(int zobristHash) => _table[zobristHash];
+
   TranspositionTableEntry? retrieve(int zobristHash, int depth, int alpha, int beta, int plyFromRoot) {
     // Directly look up entry as this is O(1) timing instead of using a list contains
     TranspositionTableEntry? entry = _table[zobristHash];

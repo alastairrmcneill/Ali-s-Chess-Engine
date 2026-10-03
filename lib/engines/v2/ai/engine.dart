@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math';
 
 import 'package:ace/engines/v2/ai/evaluation.dart';
@@ -27,10 +26,16 @@ class Engine {
   late int bestEvalThisIteration;
   bool hasSearchedAtLeastOneMove = false;
 
-  Future<Move?> getBestMove(Board board, int thinkingTime) async {
+  /// One entry per iterative deepening step of the latest [getBestMove], in order.
+  List<SearchIteration> searchLog = [];
+  void Function(SearchIteration iteration)? onIteration;
+
+  Move? getBestMove(Board board, int thinkingTime, {void Function(SearchIteration iteration)? onIteration}) {
     // Reset values
     maxDuration = Duration(milliseconds: thinkingTime);
     debugInfo = DebugInfo();
+    searchLog = [];
+    this.onIteration = onIteration;
     transpositionTable.clear();
     stopwatch = Stopwatch()..start();
     abortSearch = false;
@@ -40,49 +45,34 @@ class Engine {
     bestEval = bestEvalThisIteration = 0;
 
     // Run search
-    await runIterativeDeepening();
-
-    // Debugging
-    print("""Total Positions:  ${debugInfo.totalEvaluations},
-         Q Search Positions: ${debugInfo.numQNodes},
-         Q Search max depth: ${debugInfo.maxQSearchDepth} ply,
-         Transpositions: ${debugInfo.numTranspositions},
-         Best move: $bestMove
-        """);
+    runIterativeDeepening();
 
     stopwatch.stop();
     return bestMove;
   }
 
-  Future<void> runIterativeDeepening() async {
-    // Async to allow timer to interupt it
-
+  void runIterativeDeepening() {
     for (int searchDepth = 1; searchDepth <= 200; searchDepth++) {
-      print("Starting with search of depth $searchDepth");
       int alpha = -1000000001; // Best already explored option along the path to the root for the maximizer
       int beta = 1000000001; //Best already explored option along the path to the root for the minimizer
       bestEvalThisIteration = -1000000000;
       bestMoveThisIteration = null;
       hasSearchedAtLeastOneMove = false;
 
-      await search(searchDepth, alpha, beta, 0);
+      search(searchDepth, alpha, beta, 0);
 
       if (abortSearch) {
         if (hasSearchedAtLeastOneMove) {
           bestMove = bestMoveThisIteration;
           bestEval = bestEvalThisIteration;
-          print("Search aborted during search $searchDepth: ");
-          print("Best eval: $bestEval");
-          print("Best move: $bestMove");
         }
+        _recordIteration(searchDepth, aborted: true);
 
         break;
       } else {
         bestMove = bestMoveThisIteration;
         bestEval = bestEvalThisIteration;
-        print("After searching with depth $searchDepth: ");
-        print("Best eval: $bestEval");
-        print("Best move: $bestMove");
+        _recordIteration(searchDepth, aborted: false);
       }
 
       if (stopwatch.elapsed >= maxDuration) {
@@ -92,7 +82,51 @@ class Engine {
     }
   }
 
-  Future<int> search(int depth, int alpha, int beta, int plyFromRoot) async {
+  void _recordIteration(int depth, {required bool aborted}) {
+    final move = bestMoveThisIteration;
+    final iteration = SearchIteration(
+      depth: depth,
+      eval: bestEvalThisIteration,
+      bestMove: move,
+      pv: aborted ? [if (move != null) move] : _principalVariation(move, depth),
+      elapsedMs: stopwatch.elapsedMilliseconds,
+      aborted: aborted,
+      nodes: debugInfo.numNodes,
+      qNodes: debugInfo.numQNodes,
+      transpositions: debugInfo.numTranspositions,
+      maxQDepth: debugInfo.maxQSearchDepth,
+      evaluations: debugInfo.totalEvaluations,
+    );
+    searchLog.add(iteration);
+    onIteration?.call(iteration);
+  }
+
+  /// Best-effort line starting with [first], extended by following the transposition table's best moves.
+  /// Read-only diagnostics: the board is restored and nothing here influences move choice.
+  List<Move> _principalVariation(Move? first, int maxLength) {
+    if (first == null) return [];
+    final line = <Move>[first];
+    final seen = <int>{board.zobristKey};
+    board.makeMove(first);
+    while (line.length < maxLength) {
+      if (!seen.add(board.zobristKey)) break;
+      final entry = transpositionTable.peek(board.zobristKey);
+      if (entry == null) break;
+      final next = moveGenerator.generateLegalMoves(board).where((m) =>
+          m.startingSquare == entry.bestMove.startingSquare &&
+          m.targetSquare == entry.bestMove.targetSquare &&
+          m.promotion == entry.bestMove.promotion);
+      if (next.isEmpty) break;
+      line.add(next.first);
+      board.makeMove(next.first);
+    }
+    for (final move in line.reversed) {
+      board.unMakeMove(move);
+    }
+    return line;
+  }
+
+  int search(int depth, int alpha, int beta, int plyFromRoot) {
     // If the thinking time has elapsed
     if (stopwatch.elapsed >= maxDuration) {
       abortSearch = true;
@@ -148,7 +182,7 @@ class Engine {
       board.makeMove(move);
 
       // Search all moves from there
-      int moveEval = -1 * await search(depth - 1, -beta, -alpha, plyFromRoot + 1);
+      int moveEval = -1 * search(depth - 1, -beta, -alpha, plyFromRoot + 1);
 
       // Un do the move we made above
       board.unMakeMove(move);
@@ -186,11 +220,6 @@ class Engine {
           bestMoveThisIteration = move;
           hasSearchedAtLeastOneMove = true;
         }
-      }
-
-      // Periodically yield control so that processes can check the timer
-      if (stopwatch.elapsedMilliseconds % 10 == 0) {
-        await Future.delayed(Duration.zero);
       }
     }
 
@@ -258,4 +287,32 @@ class DebugInfo {
   int numQNodes = 0;
   int numTranspositions = 0;
   int maxQSearchDepth = 0;
+}
+
+class SearchIteration {
+  final int depth;
+  final int eval;
+  final Move? bestMove;
+  final List<Move> pv;
+  final int elapsedMs; // stopwatch time when this iteration ended
+  final bool aborted; // ran out of time before finishing
+  final int nodes;
+  final int qNodes;
+  final int transpositions;
+  final int maxQDepth;
+  final int evaluations;
+
+  const SearchIteration({
+    required this.depth,
+    required this.eval,
+    required this.bestMove,
+    required this.pv,
+    required this.elapsedMs,
+    required this.aborted,
+    required this.nodes,
+    required this.qNodes,
+    required this.transpositions,
+    required this.maxQDepth,
+    required this.evaluations,
+  });
 }

@@ -15,10 +15,15 @@ class ScriptedEngine implements ChessEngine {
   String get displayName => 'Scripted';
 
   @override
-  Future<void> newGame() async => _next = 0;
+  void newGame() => _next = 0;
 
   @override
-  Future<EngineMoveResult> getMove(String startingFen, List<String> uciMoves, SearchLimits limits) async {
+  EngineMoveResult getMove(
+    String startingFen,
+    List<String> uciMoves,
+    SearchLimits limits, {
+    SearchProgressCallback? onIteration,
+  }) {
     if (_next >= moves.length) {
       throw StateError('ScriptedEngine ran out of scripted moves');
     }
@@ -38,10 +43,15 @@ class IllegalEngine implements ChessEngine {
   String get displayName => 'Illegal';
 
   @override
-  Future<void> newGame() async {}
+  void newGame() {}
 
   @override
-  Future<EngineMoveResult> getMove(String startingFen, List<String> uciMoves, SearchLimits limits) async =>
+  EngineMoveResult getMove(
+    String startingFen,
+    List<String> uciMoves,
+    SearchLimits limits, {
+    SearchProgressCallback? onIteration,
+  }) =>
       EngineMoveResult(uciMove: 'a1a1');
 
   @override
@@ -57,10 +67,15 @@ class CrashingEngine implements ChessEngine {
   String get displayName => 'Crashing';
 
   @override
-  Future<void> newGame() async {}
+  void newGame() {}
 
   @override
-  Future<EngineMoveResult> getMove(String startingFen, List<String> uciMoves, SearchLimits limits) async {
+  EngineMoveResult getMove(
+    String startingFen,
+    List<String> uciMoves,
+    SearchLimits limits, {
+    SearchProgressCallback? onIteration,
+  }) {
     throw Exception('boom');
   }
 
@@ -77,10 +92,15 @@ class MalformedEngine implements ChessEngine {
   String get displayName => 'Malformed';
 
   @override
-  Future<void> newGame() async {}
+  void newGame() {}
 
   @override
-  Future<EngineMoveResult> getMove(String startingFen, List<String> uciMoves, SearchLimits limits) async =>
+  EngineMoveResult getMove(
+    String startingFen,
+    List<String> uciMoves,
+    SearchLimits limits, {
+    SearchProgressCallback? onIteration,
+  }) =>
       EngineMoveResult(uciMove: 'xyz');
 
   @override
@@ -96,10 +116,15 @@ class NoMoveEngine implements ChessEngine {
   String get displayName => 'No move';
 
   @override
-  Future<void> newGame() async {}
+  void newGame() {}
 
   @override
-  Future<EngineMoveResult> getMove(String startingFen, List<String> uciMoves, SearchLimits limits) async =>
+  EngineMoveResult getMove(
+    String startingFen,
+    List<String> uciMoves,
+    SearchLimits limits, {
+    SearchProgressCallback? onIteration,
+  }) =>
       EngineMoveResult(uciMove: '');
 
   @override
@@ -121,15 +146,20 @@ class CountingEngine implements ChessEngine {
   String get displayName => inner.displayName;
 
   @override
-  Future<void> newGame() async {
+  void newGame() {
     newGameCalls++;
-    await inner.newGame();
+    inner.newGame();
   }
 
   @override
-  Future<EngineMoveResult> getMove(String startingFen, List<String> uciMoves, SearchLimits limits) async {
+  EngineMoveResult getMove(
+    String startingFen,
+    List<String> uciMoves,
+    SearchLimits limits, {
+    SearchProgressCallback? onIteration,
+  }) {
     getMoveCalls++;
-    return inner.getMove(startingFen, uciMoves, limits);
+    return inner.getMove(startingFen, uciMoves, limits, onIteration: onIteration);
   }
 
   @override

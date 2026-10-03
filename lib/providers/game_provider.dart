@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:ace/chess_core/game_end.dart';
 import 'package:ace/chess_core/notation/piece.dart';
@@ -9,6 +10,8 @@ import 'package:ace/chess_core/rules/move.dart';
 import 'package:ace/chess_core/rules/move_generator.dart';
 import 'package:ace/engines/engine_interface.dart';
 import 'package:ace/engines/engine_registry.dart';
+import 'package:ace/match/game_record.dart';
+import 'package:ace/match/thinking_log.dart';
 import 'package:ace/services/engine_worker.dart';
 import 'package:flutter/foundation.dart';
 
@@ -36,7 +39,9 @@ class GameProvider extends ChangeNotifier {
   StreamSubscription<SearchStats>? _statsSubscription;
   bool _engineThinking = false;
   SearchStats? _stats;
+  final List<SearchStats> _iterations = [];
   int _searchesCompleted = 0;
+  File? _thinkingFile;
 
   /// Bumped on every (re)start and exit so results from a superseded game are ignored.
   int _generation = 0;
@@ -49,6 +54,12 @@ class GameProvider extends ChangeNotifier {
   GameEnd? get gameEnd => _gameEnd;
   bool get engineThinking => _engineThinking;
   SearchStats? get stats => _stats;
+
+  /// Every iterative deepening step of the search in progress (or the last one), in order.
+  List<SearchStats> get iterations => List.unmodifiable(_iterations);
+
+  /// Where this game's per-move thinking log is written, if it could be created.
+  String? get thinkingLogPath => _thinkingFile?.path;
   int get searchesCompleted => _searchesCompleted;
   int get generation => _generation;
   bool get playerIsWhite => _settings?.playerIsWhite ?? true;
@@ -75,8 +86,10 @@ class GameProvider extends ChangeNotifier {
     _selectedIndex = null;
     _gameEnd = null;
     _stats = null;
+    _iterations.clear();
     _searchesCompleted = 0;
     _engineThinking = false;
+    _thinkingFile = _createThinkingFile();
     notifyListeners();
 
     final worker = await EngineWorker.spawn(settings.engineId);
@@ -87,6 +100,7 @@ class GameProvider extends ChangeNotifier {
     _worker = worker;
     _statsSubscription = worker.stats.listen((stats) {
       _stats = stats;
+      _iterations.add(stats);
       notifyListeners();
     });
 
@@ -174,13 +188,16 @@ class GameProvider extends ChangeNotifier {
 
     _engineThinking = true;
     _stats = null;
+    _iterations.clear();
     notifyListeners();
 
+    final sw = Stopwatch()..start();
     try {
       final result = await worker.search(_referee.startFen, List.of(_referee.uciHistory), _settings!.moveTime);
       if (generation != _generation) return;
       _engineThinking = false;
       _searchesCompleted++;
+      _logThinking(result, _referee.uciHistory.length + 1, sw.elapsedMilliseconds);
 
       final move = _legalMoves.where((m) => _toUci(m) == result.uciMove).firstOrNull;
       if (move == null) {
@@ -193,6 +210,35 @@ class GameProvider extends ChangeNotifier {
       _engineThinking = false;
       _endWithEngineFailure(GameTermination.engineError, e.toString());
     }
+  }
+
+  static File? _createThinkingFile() {
+    try {
+      final now = DateTime.now();
+      String two(int n) => n.toString().padLeft(2, '0');
+      final stamp = '${now.year}-${two(now.month)}-${two(now.day)}_${two(now.hour)}${two(now.minute)}${two(now.second)}';
+      final dir = Directory('${Directory.systemTemp.path}/ace_engine_logs')..createSync(recursive: true);
+      return File('${dir.path}/game_$stamp.thinking.jsonl');
+    } catch (_) {
+      return null; // logging is best effort (e.g. unsupported platform)
+    }
+  }
+
+  /// Appends one JSON line for the engine move that was just searched. Best effort.
+  void _logThinking(EngineMoveResult result, int ply, int timeMs) {
+    final file = _thinkingFile;
+    if (file == null) return;
+    try {
+      final stat = MoveStat(timeMs, result.depth, result.nodes, result.evaluation, pv: result.principalVariation);
+      final line = ThinkingLog.line(
+        game: _generation,
+        ply: ply,
+        white: _referee.whiteToMove,
+        move: result.uciMove,
+        stat: stat,
+      );
+      file.writeAsStringSync('$line\n', mode: FileMode.append);
+    } catch (_) {}
   }
 
   void _endWithEngineFailure(GameTermination termination, String detail) {

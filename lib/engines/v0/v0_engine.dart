@@ -12,10 +12,15 @@ class V0Engine implements ChessEngine {
   String get displayName => 'v0 Engine';
 
   @override
-  Future<void> newGame() async {}
+  void newGame() {}
 
   @override
-  Future<EngineMoveResult> getMove(String startingFen, List<String> uciMoves, SearchLimits limits) async {
+  EngineMoveResult getMove(
+    String startingFen,
+    List<String> uciMoves,
+    SearchLimits limits, {
+    SearchProgressCallback? onIteration,
+  }) {
     final board = Board.fromFEN(startingFen);
     final moveGenerator = MoveGenerator();
 
