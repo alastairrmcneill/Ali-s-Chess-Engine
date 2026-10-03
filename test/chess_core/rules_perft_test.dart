@@ -12,7 +12,7 @@ class _PerftCase {
 
 // Same cases as test/engines/perft_all_versions_test.dart, plus two extra chessprogramming.org
 // positions, run directly against chess_core/rules' own board + move generator. Depths are capped
-// so the suite runs quickly; a rules bug found here is a v1 bug too (see docs/manual_plan.md §11).
+// so the suite runs quickly; a rules bug found here is an engine bug too (see docs/manual_plan.md §11).
 final List<_PerftCase> _testCases = [
   _PerftCase(
     "starting position",

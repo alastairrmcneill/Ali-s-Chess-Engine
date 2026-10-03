@@ -1,10 +1,7 @@
-import 'dart:collection';
-
 import 'package:ace/chess_core/notation/fen.dart';
 import 'package:ace/engines/v0/core/game_state.dart';
 import 'package:ace/engines/v0/core/move.dart';
 import 'package:ace/engines/v0/core/piece.dart';
-import 'package:ace/engines/v0/core/zobrist.dart';
 
 class Board {
   late List<int> position;
@@ -16,9 +13,7 @@ class Board {
   late bool blackCastleQueenSide;
   late List<GameState> gameStateHistory;
   late int fiftyMoveRule;
-  late HashMap<int, int> hashHistory = HashMap();
   late int plyCount;
-  late int zobristKey;
 
   Board() : this.fromFEN(FenPosition.startingPosition);
 
@@ -33,7 +28,6 @@ class Board {
     blackCastleKingSide = fenPosition.blackCastleKingSide;
     blackCastleQueenSide = fenPosition.blackCastleQueenSide;
 
-    zobristKey = Zobrist.getZobristForBoard(this);
     gameStateHistory = [];
     fiftyMoveRule = fenPosition.halfmoveClock;
     plyCount = (fenPosition.fullmoveNumber - 1) * 2 + (whiteToPlay ? 0 : 1);
@@ -46,7 +40,6 @@ class Board {
     gameState.whiteCastleQueenSide = whiteCastleQueenSide;
     gameState.blackCastleKingSide = blackCastleKingSide;
     gameState.blackCastleQueenSide = blackCastleQueenSide;
-    gameState.zobristKey = zobristKey;
 
     // Who is moving to where
     int selectedPiece = position[move.startingSquare];
@@ -55,21 +48,14 @@ class Board {
 
     gameState.enPassantSquare = enPassantSquare;
     gameState.capturedPiece = capturedPiece;
-    int startingCastlingIndex = castlingRightsAsInt();
-
-    // Remove selected piece from start square zobrist
-    zobristKey ^= Zobrist.piecesArray[selectedPiece][move.startingSquare]; // Remove starting peice from starting square
 
     // Handle En passant file
-    zobristKey ^= Zobrist.enPassantSquares[enPassantSquare + 1]; // Remove old enpassant square
     if (move.pawnTwoForward) {
       int direction = whiteToPlay ? -8 : 8;
       enPassantSquare = move.targetSquare - direction;
     } else {
       enPassantSquare = -1;
     }
-
-    zobristKey ^= Zobrist.enPassantSquares[enPassantSquare + 1]; // Add new en passant square
 
     // Handle promotion
     if (move.promotion != 0) {
@@ -81,8 +67,6 @@ class Board {
       int direction = whiteToPlay ? 8 : -8;
       int enPassantCaptureSquare = move.targetSquare + direction;
 
-      zobristKey ^= Zobrist.piecesArray[position[enPassantCaptureSquare]]
-          [enPassantCaptureSquare]; // Remove en passant capture square from zobrist
       gameState.capturedPiece = position[enPassantCaptureSquare];
       position[enPassantCaptureSquare] = 0;
     }
@@ -95,8 +79,6 @@ class Board {
 
       position[rookTargetIndex] = position[rookStartingIndex];
       position[rookStartingIndex] = 0;
-      zobristKey ^= Zobrist.piecesArray[position[rookTargetIndex]][rookStartingIndex];
-      zobristKey ^= Zobrist.piecesArray[position[rookTargetIndex]][rookTargetIndex];
 
       switch (castlingRank) {
         case 0:
@@ -149,23 +131,14 @@ class Board {
       }
     }
 
-    int endingCastlingIndex = castlingRightsAsInt();
-    if (startingCastlingIndex != endingCastlingIndex) {
-      zobristKey ^= Zobrist.castlingRights[startingCastlingIndex];
-      zobristKey ^= Zobrist.castlingRights[endingCastlingIndex];
-    }
     // End of castling
 
     // Update positions
     position[move.targetSquare] = selectedPiece;
     position[move.startingSquare] = 0;
 
-    zobristKey ^= Zobrist.piecesArray[capturedPiece][move.targetSquare]; // Remove piece from target square
-    zobristKey ^= Zobrist.piecesArray[selectedPiece][move.targetSquare]; // Add starting piece to target square
-
     // Swap sides
     whiteToPlay = !whiteToPlay;
-    zobristKey ^= Zobrist.sideToMove;
 
     gameState.fiftyMoveRule = fiftyMoveRule;
     fiftyMoveRule++;
@@ -174,7 +147,6 @@ class Board {
     }
 
     gameStateHistory.add(gameState);
-    addMoveToHashHistory(zobristKey);
   }
 
   unMakeMove(Move move) {
@@ -263,8 +235,6 @@ class Board {
 
     fiftyMoveRule = gameStateHistory.last.fiftyMoveRule;
 
-    removeMoveFromHashHistory();
-    zobristKey = gameStateHistory.last.zobristKey;
     gameStateHistory.removeLast();
 
     position[move.startingSquare] = selectedPiece;
@@ -272,21 +242,4 @@ class Board {
     whiteToPlay = !whiteToPlay;
   }
 
-  int castlingRightsAsInt() {
-    int castlingIndex = 0;
-    if (whiteCastleKingSide) castlingIndex |= 8;
-    if (whiteCastleQueenSide) castlingIndex |= 4;
-    if (blackCastleKingSide) castlingIndex |= 2;
-    if (blackCastleQueenSide) castlingIndex |= 1;
-    return castlingIndex;
-  }
-
-  void addMoveToHashHistory(int zobristHash) {
-    hashHistory.update(zobristHash, (count) => count + 1, ifAbsent: () => 1);
-  }
-
-  void removeMoveFromHashHistory() {
-    // Since the move is undone, decrement the count in the hash history.
-    hashHistory.update(zobristKey, (count) => count - 1);
-  }
 }

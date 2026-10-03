@@ -1,6 +1,6 @@
 import 'package:ace/chess_core/game_end.dart';
 import 'package:ace/engines/engine_interface.dart';
-import 'package:ace/engines/v1/v1_engine.dart';
+import 'package:ace/engines/v0/v0_engine.dart';
 import 'package:ace/match/game_runner.dart';
 import 'package:ace/match/opening_book.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,8 +17,8 @@ void main() {
     final record = await GameRunner().playGame(
       gameNumber: 1,
       opening: opening,
-      white: V1Engine(),
-      black: V1Engine(),
+      white: V0Engine(),
+      black: V0Engine(),
       engineAIsWhite: true,
       searchLimits: SearchLimits(moveTime: const Duration(milliseconds: 50)),
       maxPlies: 20,

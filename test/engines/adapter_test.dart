@@ -1,24 +1,24 @@
-import 'package:ace/chess_core/rules/board.dart';
-import 'package:ace/chess_core/rules/move_generator.dart';
+import 'package:ace/engines/v0/core/board.dart';
+import 'package:ace/engines/v0/core/move_generator.dart';
 import 'package:ace/engines/engine_interface.dart';
 import 'package:ace/engines/engine_registry.dart';
-import 'package:ace/engines/v1/v1_engine.dart';
+import 'package:ace/engines/v0/v0_engine.dart';
 import 'package:ace/chess_core/notation/fen.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 final _uciMoveRegExp = RegExp(r'^[a-h][1-8][a-h][1-8][qrbn]?$');
 
 // Per-version helpers for checking that a move is in the engine's own legal move list.
-// Only v1 is wired up today; future versions can add their own entry here.
+// Only v0 is wired up today; future versions can add their own entry here.
 final _ownLegalMoves = <String, Set<String> Function(String fen, List<String> uciMoves)>{
-  'v1': (fen, uciMoves) {
+  'v0': (fen, uciMoves) {
     final board = Board.fromFEN(fen);
     for (final uciMove in uciMoves) {
       board.makeMove(
-        MoveGenerator().generateLegalMoves(board).firstWhere((m) => V1Engine().moveToUci(m) == uciMove),
+        MoveGenerator().generateLegalMoves(board).firstWhere((m) => V0Engine().moveToUci(m) == uciMove),
       );
     }
-    return MoveGenerator().generateLegalMoves(board).map((m) => V1Engine().moveToUci(m)).toSet();
+    return MoveGenerator().generateLegalMoves(board).map((m) => V0Engine().moveToUci(m)).toSet();
   },
 };
 
