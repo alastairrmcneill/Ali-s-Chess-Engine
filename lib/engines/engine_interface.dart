@@ -29,3 +29,45 @@ abstract class ChessEngine {
 
   int perft(String fen, int depth);
 }
+
+/// A snapshot of an engine's search counters, read while it is still thinking.
+class SearchStats {
+  final int? depth; // iterative deepening depth currently being searched
+  final int nodes;
+  final int qNodes;
+  final int transpositions;
+  final int maxQDepth;
+  final int evaluations;
+  final int? eval; // centipawns from the side to move's point of view, as of the last completed depth
+  final String? bestMove; // UCI, as of the last completed depth
+  final Duration elapsed;
+
+  const SearchStats({
+    this.depth,
+    required this.nodes,
+    required this.qNodes,
+    required this.transpositions,
+    required this.maxQDepth,
+    required this.evaluations,
+    this.eval,
+    this.bestMove,
+    this.elapsed = Duration.zero,
+  });
+
+  SearchStats copyWith({int? depth, Duration? elapsed}) => SearchStats(
+        depth: depth ?? this.depth,
+        nodes: nodes,
+        qNodes: qNodes,
+        transpositions: transpositions,
+        maxQDepth: maxQDepth,
+        evaluations: evaluations,
+        eval: eval,
+        bestMove: bestMove,
+        elapsed: elapsed ?? this.elapsed,
+      );
+}
+
+/// Implemented by engines that can report [SearchStats] while a search is running.
+abstract class LiveStatsEngine {
+  SearchStats? get liveStats;
+}

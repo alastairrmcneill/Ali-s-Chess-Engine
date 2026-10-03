@@ -1,257 +1,212 @@
-import 'package:ace/engines/v1/ai/evaluation.dart';
-import 'package:ace/engines/v1/core/board.dart';
-import 'package:ace/engines/v1/ai/engine.dart';
-import 'package:ace/engines/v1/core/move.dart';
-import 'package:ace/engines/v1/core/move_generator.dart';
-import 'package:ace/engines/v1/core/piece.dart';
-import 'package:ace/engines/v1/core/zobrist.dart';
-import 'package:flutter/material.dart';
+import 'dart:async';
+
+import 'package:ace/chess_core/game_end.dart';
+import 'package:ace/chess_core/notation/piece.dart';
+import 'package:ace/chess_core/notation/uci.dart';
+import 'package:ace/chess_core/referee.dart';
+import 'package:ace/chess_core/rules/board.dart';
+import 'package:ace/chess_core/rules/move.dart';
+import 'package:ace/chess_core/rules/move_generator.dart';
+import 'package:ace/engines/engine_interface.dart';
+import 'package:ace/engines/engine_registry.dart';
+import 'package:ace/services/engine_worker.dart';
+import 'package:flutter/foundation.dart';
+
+class GameSettings {
+  final String engineId;
+  final Duration moveTime;
+  final bool playerIsWhite;
+
+  const GameSettings({required this.engineId, required this.moveTime, required this.playerIsWhite});
+
+  String get engineName => EngineRegistry.create(engineId).displayName;
+}
 
 class GameProvider extends ChangeNotifier {
-  Zobrist zobrist = Zobrist(); // Needed to initialise the zobrist values before hashing can begin
-  Board _board = Board();
-  List<Move> _moveHistory = [];
-  MoveGenerator _moveGenerator = MoveGenerator();
-  int? _selectedIndex = null;
-  Result _gameResult = Result.playing;
+  GameSettings? _settings;
+  late Referee _referee;
+  late Board _board;
+  final MoveGenerator _moveGenerator = MoveGenerator();
   List<Move> _legalMoves = [];
-  Evaluation _evaluation = Evaluation();
-  Engine _engine = Engine();
-  bool _engineThinking = false;
-  int _thinkingTime = 2000;
+  Move? _lastMove;
+  int? _selectedIndex;
+  GameEnd? _gameEnd;
 
-  reset() {
-    _board = Board();
-    _moveGenerator = MoveGenerator();
-    _selectedIndex = null;
-    _gameResult = Result.playing;
-    _legalMoves = [];
-    _legalMoves = _moveGenerator.generateLegalMoves(_board);
-    _engineThinking = false;
-    _moveHistory = [];
+  EngineWorker? _worker;
+  StreamSubscription<SearchStats>? _statsSubscription;
+  bool _engineThinking = false;
+  SearchStats? _stats;
+  int _searchesCompleted = 0;
+
+  /// Bumped on every (re)start and exit so results from a superseded game are ignored.
+  int _generation = 0;
+
+  GameSettings? get settings => _settings;
+  List<int> get position => _board.position;
+  List<Move> get legalMoves => _legalMoves;
+  Move? get lastMove => _lastMove;
+  int? get selectedIndex => _selectedIndex;
+  GameEnd? get gameEnd => _gameEnd;
+  bool get engineThinking => _engineThinking;
+  SearchStats? get stats => _stats;
+  int get searchesCompleted => _searchesCompleted;
+  int get generation => _generation;
+  bool get playerIsWhite => _settings?.playerIsWhite ?? true;
+  int get playerColor => playerIsWhite ? Piece.white : Piece.black;
+  bool get isHumanTurn => _worker != null && _gameEnd == null && !_engineThinking && _board.whiteToPlay == playerIsWhite;
+
+  /// Engine evaluation in centipawns from White's point of view (the engine reports it for the side to move).
+  int? get evalForWhite {
+    final eval = _stats?.eval;
+    if (eval == null) return null;
+    return playerIsWhite ? -eval : eval;
   }
 
-  Board get board => _board;
-  MoveGenerator get moveGenerator => _moveGenerator;
-  Result get gameResult => _gameResult;
-  bool get whiteToPlay => _board.whiteToPlay;
-  int? get selectedIndex => _selectedIndex;
-  List<Move> get legalMoves => _legalMoves;
-  int get currentEval => _evaluation.evaluate(_board);
-  bool get engineThinking => _engineThinking;
-  Move get lastMove => _moveHistory.isNotEmpty ? _moveHistory.last : Move.invalid;
-  int get zobristKey => _board.zobristKey;
-  int get thinkingTime => _thinkingTime;
+  Future<void> startGame(GameSettings settings) async {
+    _teardown();
+    final generation = ++_generation;
+    _settings = settings;
 
-  set selectedIndex(int? index) {
+    // The referee initialises the zobrist tables, so it has to be created before the board.
+    _referee = Referee(Referee.standardStartFen);
+    _board = Board.fromFEN(Referee.standardStartFen);
+    _legalMoves = _moveGenerator.generateLegalMoves(_board);
+    _lastMove = null;
+    _selectedIndex = null;
+    _gameEnd = null;
+    _stats = null;
+    _searchesCompleted = 0;
+    _engineThinking = false;
+    notifyListeners();
+
+    final worker = await EngineWorker.spawn(settings.engineId);
+    if (generation != _generation) {
+      worker.dispose();
+      return;
+    }
+    _worker = worker;
+    _statsSubscription = worker.stats.listen((stats) {
+      _stats = stats;
+      notifyListeners();
+    });
+
+    if (!isHumanTurn) unawaited(_engineTurn());
+  }
+
+  Future<void> restart() => startGame(_settings!);
+
+  /// Stops the engine and discards the game. Doesn't notify, so it is safe to call from `dispose`.
+  void endGame() {
+    _teardown();
+    _generation++;
+    _settings = null;
+  }
+
+  void _teardown() {
+    _statsSubscription?.cancel();
+    _statsSubscription = null;
+    _worker?.dispose();
+    _worker = null;
+    _engineThinking = false;
+  }
+
+  @override
+  void dispose() {
+    _teardown();
+    super.dispose();
+  }
+
+  bool canPickUp(int index) {
+    if (!isHumanTurn) return false;
+    final piece = _board.position[index];
+    return piece != Piece.none && Piece.isColor(piece, playerColor);
+  }
+
+  void select(int index) {
+    if (!isHumanTurn) return;
+    _selectedIndex = canPickUp(index) && _selectedIndex != index ? index : null;
+    notifyListeners();
+  }
+
+  /// Like [select] but never deselects, so starting a drag on the already selected piece keeps it selected.
+  void pickUp(int index) {
+    if (!canPickUp(index) || _selectedIndex == index) return;
     _selectedIndex = index;
     notifyListeners();
   }
 
-  set thinkingTime(int thinkingTime) {
-    _thinkingTime = thinkingTime;
+  void clearSelection() {
+    if (_selectedIndex == null) return;
+    _selectedIndex = null;
     notifyListeners();
   }
 
-  setEngineThinking(bool thinking) {
-    _engineThinking = thinking;
+  /// Legal moves from [from] to [to]. More than one means the move is a promotion and a piece must be chosen.
+  List<Move> movesBetween(int from, int to) =>
+      _legalMoves.where((m) => m.startingSquare == from && m.targetSquare == to).toList();
+
+  bool isTargetOfSelected(int index) {
+    final from = _selectedIndex;
+    return from != null && isHumanTurn && movesBetween(from, index).isNotEmpty;
   }
 
-  Future select(int index) async {
-    // Called when a square on the UI gets tapped or successfully dragged
-
-    if (_selectedIndex != null) {
-      // If something has been selected already then try to see if we can move there
-      bool result = await move(index);
-      if (!result) {
-        _selectedIndex = null;
-        await select(index);
-      }
-    } else {
-      // If not then set this peiece to be selected, unless its an empty square and set selected to be null
-      if (_board.position[index] == Piece.none) {
-        _selectedIndex = null;
-      } else {
-        if ((_board.whiteToPlay && Piece.isColor(_board.position[index], Piece.white)) ||
-            (!_board.whiteToPlay && Piece.isColor(_board.position[index], Piece.black))) {
-          _selectedIndex = index;
-        }
-      }
-    }
-    await updateDisplay();
+  void playHumanMove(Move move) {
+    if (!isHumanTurn) return;
+    _applyMove(move);
   }
 
-  Future move(int targetIndex) async {
-    // Loop through the moves to find if we can move to this square from where we are
-
-    for (var move in legalMoves) {
-      if (move.startingSquare == _selectedIndex && move.targetSquare == targetIndex) {
-        _board.makeMove(move);
-        _moveHistory.add(move);
-        _selectedIndex = null;
-        _getGameResult();
-        await updateDisplay();
-
-        // This is where we call the engine. Remove to do player v player
-        await _aiMove();
-        return true;
-      }
-    }
-    await updateDisplay();
-    return false;
-  }
-
-  Future _aiMove() async {
-    // Only play a move if the game is still being played
-    if (gameResult == Result.playing) {
-      // Update display to give user feedback
-      setEngineThinking(true);
-      await updateDisplay();
-
-      // Find best move in this position
-      Move? engineMove = await _engine.getBestMove(board, _thinkingTime);
-
-      // Update display to give user feedback
-      setEngineThinking(false);
-      await updateDisplay();
-
-      // Make the move
-      if (engineMove != null) {
-        _board.makeMove(engineMove);
-        _moveHistory.add(engineMove);
-      }
-
-      // Check the state of the game after the move is made before it is the user's turn again
-      _getGameResult();
-      notifyListeners();
-    }
-  }
-
-  Future startAIGame() async {
-    // If you want to watch an AI vs AI game
-    while (gameResult == Result.playing) {
-      await Future.delayed(const Duration(milliseconds: 20));
-      await _aiMove();
-    }
-  }
-
-  bool isMoveValid(int targetIndex) {
-    // Used to check if it is valid to drag a piece to the target square
-    List<Move> legalMoves = _moveGenerator.generateLegalMoves(board);
-
-    for (Move move in legalMoves) {
-      if (move.startingSquare == selectedIndex && move.targetSquare == targetIndex) {
-        notifyListeners();
-        return true;
-      }
-    }
-    notifyListeners();
-    return false;
-  }
-
-  _getGameResult() {
-    // Check all possible end game conditions
+  void _applyMove(Move move) {
+    _referee.tryPlayUci(_toUci(move));
+    _board.makeMove(move);
+    _lastMove = move;
+    _selectedIndex = null;
     _legalMoves = _moveGenerator.generateLegalMoves(_board);
-
-    // Check if stalemate or checkmate
-    if (legalMoves.isEmpty) {
-      if (_moveGenerator.opponentAttackMap.contains(_moveGenerator.friendlyKingIndex)) {
-        _gameResult = _board.whiteToPlay ? Result.whiteIsMated : Result.blackIsMated;
-        return;
-      }
-      _gameResult = Result.stalemate;
-      return;
-    }
-
-    // Check 50 moves
-    if (_board.fiftyMoveRule >= 100) {
-      _gameResult = Result.fiftyMoveRule;
-      return;
-    }
-
-    // Check 3 repetition
-    if (_board.hashHistory.values.any((element) => element >= 3)) {
-      _gameResult = Result.repeition;
-
-      return;
-    }
-
-    // Check insufficient material
-    int numQueens = 0;
-    int numRooks = 0;
-    int numBishops = 0;
-    List<int> whiteBishops = [];
-    List<int> blackBishops = [];
-    int numKnights = 0;
-    int numPawns = 0;
-
-    for (int i = 0; i < _board.position.length; i++) {
-      int piece = _board.position[i];
-
-      int pieceType = Piece.type(piece);
-      switch (pieceType) {
-        case Piece.queen:
-          numQueens++;
-          break;
-        case Piece.rook:
-          numRooks++;
-          break;
-        case Piece.bishop:
-          numBishops++;
-          Piece.isColor(piece, Piece.white) ? whiteBishops.add(i) : blackBishops.add(i);
-          break;
-        case Piece.knight:
-          numKnights++;
-          break;
-        case Piece.pawn:
-          numPawns++;
-          break;
-        default:
-          break;
-      }
-    }
-
-    if (numPawns + numRooks + numQueens + numKnights + numBishops == 0) {
-      _gameResult = Result.insufficientMaterial;
-      return;
-    } else if (numPawns + numRooks + numQueens == 0) {
-      if ((numKnights == 1 && numBishops == 0) || (numBishops == 1 && numKnights == 0)) {
-        _gameResult = Result.insufficientMaterial;
-        return;
-      }
-
-      if (numKnights == 0 && whiteBishops.length == 1 && blackBishops.length == 1) {
-        // Check if the bishops are on the same squares
-        int whiteBishopRank = whiteBishops[0] % 8;
-        int whiteBishopFile = whiteBishops[0] ~/ 8;
-        int blackBishopRank = blackBishops[0] % 8;
-        int blackBishopFile = blackBishops[0] ~/ 8;
-        int whiteSquareColor = (whiteBishopFile + whiteBishopRank) % 2;
-        int blackSquareColor = (blackBishopFile + blackBishopRank) % 2;
-
-        if (whiteSquareColor == blackSquareColor) {
-          _gameResult = Result.insufficientMaterial;
-          return;
-        }
-      }
-    }
-
-    // If all pass then we are still playing
-    _gameResult = Result.playing;
-  }
-
-  Future updateDisplay() async {
+    _gameEnd = _referee.checkGameEnd();
     notifyListeners();
-    await Future.delayed(const Duration(milliseconds: 30));
-  }
-}
 
-enum Result {
-  playing,
-  whiteIsMated,
-  blackIsMated,
-  stalemate,
-  repeition,
-  fiftyMoveRule,
-  insufficientMaterial,
+    if (_gameEnd == null && !isHumanTurn) unawaited(_engineTurn());
+  }
+
+  Future<void> _engineTurn() async {
+    final worker = _worker;
+    if (worker == null) return;
+    final generation = _generation;
+
+    _engineThinking = true;
+    _stats = null;
+    notifyListeners();
+
+    try {
+      final result = await worker.search(_referee.startFen, List.of(_referee.uciHistory), _settings!.moveTime);
+      if (generation != _generation) return;
+      _engineThinking = false;
+      _searchesCompleted++;
+
+      final move = _legalMoves.where((m) => _toUci(m) == result.uciMove).firstOrNull;
+      if (move == null) {
+        _endWithEngineFailure(GameTermination.illegalMove, 'Engine played ${result.uciMove}');
+        return;
+      }
+      _applyMove(move);
+    } catch (e) {
+      if (generation != _generation) return;
+      _engineThinking = false;
+      _endWithEngineFailure(GameTermination.engineError, e.toString());
+    }
+  }
+
+  void _endWithEngineFailure(GameTermination termination, String detail) {
+    _gameEnd = GameEnd(
+      outcome: playerIsWhite ? GameOutcome.whiteWin : GameOutcome.blackWin,
+      termination: termination,
+      detail: detail,
+    );
+    notifyListeners();
+  }
+
+  static String _toUci(Move move) => UciMove(
+        from: move.startingSquare,
+        to: move.targetSquare,
+        promotion: move.promotion == 0 ? null : ' qnrb'[move.promotion],
+      ).toString();
 }

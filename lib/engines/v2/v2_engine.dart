@@ -6,7 +6,7 @@ import 'package:ace/engines/v2/core/board.dart';
 import 'package:ace/engines/v2/core/move_generator.dart';
 import 'package:ace/engines/v2/core/zobrist.dart';
 
-class V2Engine implements ChessEngine {
+class V2Engine implements ChessEngine, LiveStatsEngine {
   @override
   String get id => 'v2';
 
@@ -61,6 +61,30 @@ class V2Engine implements ChessEngine {
       uciMove: moveToUci(bestMove),
       evaluation: _engine.bestEval,
       nodes: _engine.debugInfo.numNodes + _engine.debugInfo.numQNodes,
+    );
+  }
+
+  @override
+  SearchStats? get liveStats {
+    final info = _engine.debugInfo;
+    int? eval;
+    String? best;
+    try {
+      // These are `late` fields that only exist once a search has started.
+      eval = _engine.bestEval;
+      final move = _engine.bestMove;
+      best = move == null ? null : moveToUci(move);
+    } on Error {
+      // No search has started yet.
+    }
+    return SearchStats(
+      nodes: info.numNodes,
+      qNodes: info.numQNodes,
+      transpositions: info.numTranspositions,
+      maxQDepth: info.maxQSearchDepth,
+      evaluations: info.totalEvaluations,
+      eval: eval,
+      bestMove: best,
     );
   }
 

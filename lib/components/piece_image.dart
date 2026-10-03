@@ -1,37 +1,19 @@
-import 'package:flutter/material.dart';
 import 'package:ace/chess_core/notation/piece.dart';
+import 'package:flutter/material.dart';
+
+const _pieceLetters = {
+  Piece.king: 'k',
+  Piece.pawn: 'p',
+  Piece.knight: 'n',
+  Piece.bishop: 'b',
+  Piece.rook: 'r',
+  Piece.queen: 'q',
+};
 
 Widget pieceImage(int piece) {
-  String imgString = "";
-  if (Piece.isColor(piece, Piece.white)) {
-    imgString += "w";
-  } else {
-    imgString += "b";
-  }
+  final letter = _pieceLetters[Piece.type(piece)];
+  if (letter == null) return const SizedBox.shrink();
 
-  switch (Piece.type(piece)) {
-    case 1:
-      imgString += "k";
-      break;
-    case 2:
-      imgString += "p";
-      break;
-    case 3:
-      imgString += "n";
-      break;
-    case 4:
-      imgString += "b";
-      break;
-    case 5:
-      imgString += "r";
-      break;
-    case 6:
-      imgString += "q";
-      break;
-    default:
-      imgString += "0";
-      break;
-  }
-
-  return Image.asset("assets/$imgString.png");
+  final color = Piece.isColor(piece, Piece.white) ? 'w' : 'b';
+  return Image.asset('assets/$color$letter.png', gaplessPlayback: true);
 }
