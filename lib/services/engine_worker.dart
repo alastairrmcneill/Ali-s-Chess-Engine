@@ -88,7 +88,7 @@ class EngineWorker {
           command[1] as String,
           List<String>.from(command[2] as List),
           SearchLimits(moveTime: Duration(milliseconds: command[3] as int)),
-          onIteration: (iteration) => toMain.send(['iteration', iteration.toJson()]),
+          onSearchProgressUpdate: (iteration) => toMain.send(['iteration', iteration.toJson()]),
         );
         toMain.send([
           'result',

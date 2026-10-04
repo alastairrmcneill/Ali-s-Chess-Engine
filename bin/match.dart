@@ -5,6 +5,9 @@ import 'package:ace/engines/engine_registry.dart';
 import 'package:ace/match/opening_book.dart';
 import 'package:ace/match_manager/match_config.dart';
 import 'package:ace/match_manager/match_runner.dart';
+import 'package:ace/chess_core/game_end.dart';
+import 'package:ace/match/game_record.dart';
+import 'package:ace/match_manager/match_stats.dart';
 import 'package:args/args.dart';
 
 /// dart run bin/match.dart --a v2 --b v1 [--games 1000] [--movetime 100] [--max-moves 300] [--out match_results]
@@ -69,6 +72,7 @@ Future<void> main(List<String> arguments) async {
     engineAName: engineA.displayName,
     engineBName: engineB.displayName,
     openingBookWarnings: book.warnings,
+    onGameFinished: (record, stats) => stdout.writeln(_progressLine(record, stats, config.games)),
   );
 
   stdout.writeln('\n${stats.toSummaryText(openingsDescription: 'opening_book_data.dart')}');
@@ -79,4 +83,18 @@ Never _usage(ArgParser parser, int code) {
   (code == 0 ? stdout : stderr)
       .writeln('Usage: dart run bin/match.dart --a <engine> --b <engine> [options]\n\n${parser.usage}');
   exit(code);
+}
+
+/// e.g. `[  12/1000] A (white) won by checkmate in 41 moves | A +5 =3 -4 (54.2%)`
+String _progressLine(GameRecord record, MatchStats stats, int totalGames) {
+  final width = totalGames.toString().length;
+  final result = switch (record.end.outcome) {
+    GameOutcome.draw => 'draw',
+    _ => (record.end.outcome == GameOutcome.whiteWin) == record.engineAIsWhite ? 'A won' : 'B won',
+  };
+  final colour = record.engineAIsWhite ? 'A white' : 'A black';
+  final how = record.end.termination.name;
+  final score = (stats.total.score * 100).toStringAsFixed(1);
+  return '[${record.gameNumber.toString().padLeft(width)}/$totalGames] $colour: $result by $how '
+      '(${(record.uciMoves.length / 2).ceil()} moves) | A ${stats.total} ($score%)';
 }

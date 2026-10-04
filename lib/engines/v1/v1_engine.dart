@@ -1,35 +1,22 @@
 import 'package:ace/chess_core/notation/uci.dart';
 import 'package:ace/engines/engine_interface.dart';
 import 'package:ace/engines/v1/core/move.dart';
-import 'package:ace/engines/v1/ai/engine.dart';
 import 'package:ace/engines/v1/core/board.dart';
 import 'package:ace/engines/v1/core/move_generator.dart';
-import 'package:ace/engines/v1/core/zobrist.dart';
+import 'package:ace/engines/v1/search/searcher.dart';
 
 class V1Engine implements ChessEngine {
+  late Searcher searcher;
+
   @override
   String get id => 'v1';
 
   @override
-  String get displayName => 'V1 Engine';
-
-  static bool _zobristReady = false;
-  late Engine _engine;
-
-  V1Engine() {
-    _initZobrist();
-    _engine = Engine();
-  }
-
-  static void _initZobrist() {
-    if (_zobristReady) return;
-    Zobrist(); // fills the static random tables for THIS snapshot's library
-    _zobristReady = true;
-  }
+  String get displayName => 'v1 Engine';
 
   @override
   void newGame() {
-    _engine = Engine();
+    searcher = Searcher();
   }
 
   @override
@@ -37,7 +24,7 @@ class V1Engine implements ChessEngine {
     String startingFen,
     List<String> uciMoves,
     SearchLimits limits, {
-    SearchProgressCallback? onIteration,
+    SearchProgressCallback? onSearchProgressUpdate,
   }) {
     final board = Board.fromFEN(startingFen);
     final moveGenerator = MoveGenerator();
@@ -56,42 +43,18 @@ class V1Engine implements ChessEngine {
       board.makeMove(legalMove);
     }
 
-    final bestMove = _engine.getBestMove(
-      board,
-      limits.moveTime.inMilliseconds,
-      onIteration: onIteration == null ? null : (iteration) => onIteration(_toStats(iteration)),
-    );
+    final nextMove = searcher.getBestMove(board, timeLimit: limits.moveTime);
 
-    if (bestMove == null) {
+    if (nextMove == null) {
       throw Exception('No valid move found');
     }
 
-    final completed = _engine.searchLog.where((i) => !i.aborted);
-    // The move played comes from the last step that produced one, which may be an aborted step.
-    final played = _engine.searchLog.where((i) => i.bestMove != null);
-
     return EngineMoveResult(
-      uciMove: moveToUci(bestMove),
-      evaluation: _engine.bestEval,
-      depth: completed.isEmpty ? null : completed.last.depth,
-      nodes: _engine.debugInfo.numNodes + _engine.debugInfo.numQNodes,
-      principalVariation: played.isEmpty ? null : played.last.pv.map(moveToUci).toList(),
+      uciMove: moveToUci(nextMove),
+      evaluation: board.whiteToPlay ? searcher.bestEval : -searcher.bestEval,
+      nodes: searcher.nodes,
     );
   }
-
-  SearchStats _toStats(SearchIteration i) => SearchStats(
-        depth: i.depth,
-        nodes: i.nodes,
-        qNodes: i.qNodes,
-        transpositions: i.transpositions,
-        maxQDepth: i.maxQDepth,
-        evaluations: i.evaluations,
-        eval: i.eval,
-        bestMove: i.bestMove == null ? null : moveToUci(i.bestMove!),
-        pv: i.pv.map(moveToUci).toList(),
-        elapsed: Duration(milliseconds: i.elapsedMs),
-        aborted: i.aborted,
-      );
 
   @override
   int perft(String fen, int depth) {

@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:ace/engines/engine_interface.dart';
-import 'package:ace/engines/engine_registry.dart';
 import 'package:ace/engines/v1/core/board.dart';
 import 'package:ace/engines/v1/core/move_generator.dart';
 import 'package:ace/engines/v1/v1_engine.dart';
+import 'package:ace/engines/engine_interface.dart';
+import 'package:ace/engines/engine_registry.dart';
 import 'package:ace/chess_core/notation/fen.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -31,7 +31,7 @@ void main() {
 
       test('returns a well-formed, legal UCI move from the start position', () async {
         final engine = EngineRegistry.create(id);
-        final result = await engine.getMove(FenPosition.startingPosition, [], limits);
+        final result = engine.getMove(FenPosition.startingPosition, [], limits);
 
         expect(result.uciMove, matches(_uciMoveRegExp));
 
@@ -43,7 +43,7 @@ void main() {
 
       test('promotes when the only reasonable move is a pawn push to the back rank', () async {
         final engine = EngineRegistry.create(id);
-        final result = await engine.getMove('4k3/1P6/8/8/8/8/8/4K3 w - - 0 1', [], limits);
+        final result = engine.getMove('4k3/1P6/8/8/8/8/8/4K3 w - - 0 1', [], limits);
 
         expect(result.uciMove, startsWith('b7b8'));
         expect(result.uciMove, hasLength(5));
@@ -51,7 +51,7 @@ void main() {
 
       test('replaying a history that includes castling does not throw', () async {
         final engine = EngineRegistry.create(id);
-        await engine.getMove(
+        engine.getMove(
           FenPosition.startingPosition,
           ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'g8f6', 'e1g1'],
           limits,
@@ -60,7 +60,7 @@ void main() {
 
       test('replaying an en passant line does not throw', () async {
         final engine = EngineRegistry.create(id);
-        await engine.getMove(
+        engine.getMove(
           FenPosition.startingPosition,
           ['e2e4', 'a7a6', 'e4e5', 'd7d5', 'e5d6'],
           limits,
@@ -69,7 +69,7 @@ void main() {
 
       test('an unknown/illegal move in the history throws StateError', () async {
         final engine = EngineRegistry.create(id);
-        await expectLater(
+        expectLater(
           () => engine.getMove(FenPosition.startingPosition, ['e2e5'], limits),
           throwsStateError,
         );
@@ -88,12 +88,12 @@ void main() {
       test('getMove can be called twice on the same instance, with newGame() in between', () async {
         final engine = EngineRegistry.create(id);
 
-        final first = await engine.getMove(FenPosition.startingPosition, [], limits);
+        final first = engine.getMove(FenPosition.startingPosition, [], limits);
         expect(first.uciMove, matches(_uciMoveRegExp));
 
         engine.newGame();
 
-        final second = await engine.getMove(FenPosition.startingPosition, [], limits);
+        final second = engine.getMove(FenPosition.startingPosition, [], limits);
         expect(second.uciMove, matches(_uciMoveRegExp));
       });
     });

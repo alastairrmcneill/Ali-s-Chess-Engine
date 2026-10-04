@@ -1,5 +1,5 @@
 import 'package:ace/chess_core/notation/board_helper.dart';
-import 'package:ace/engines/v1/core/piece.dart';
+import 'package:ace/chess_core/notation/piece.dart';
 
 class Move {
   final int startingSquare;

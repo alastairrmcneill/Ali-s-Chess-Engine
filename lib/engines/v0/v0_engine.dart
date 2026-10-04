@@ -19,7 +19,7 @@ class V0Engine implements ChessEngine {
     String startingFen,
     List<String> uciMoves,
     SearchLimits limits, {
-    SearchProgressCallback? onIteration,
+    SearchProgressCallback? onSearchProgressUpdate,
   }) {
     final board = Board.fromFEN(startingFen);
     final moveGenerator = MoveGenerator();
@@ -33,7 +33,7 @@ class V0Engine implements ChessEngine {
         }
       }
       if (legalMove == null) {
-        throw StateError('v1 move generator does not consider "$uciMove" a legal move');
+        throw StateError('v0 move generator does not consider "$uciMove" a legal move');
       }
       board.makeMove(legalMove);
     }
