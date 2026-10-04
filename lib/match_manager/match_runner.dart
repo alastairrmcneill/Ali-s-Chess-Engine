@@ -1,4 +1,5 @@
 import 'package:ace/engines/engine_interface.dart';
+import 'package:ace/match/game_record.dart';
 import 'package:ace/match/game_runner.dart';
 import 'package:ace/match/opening_book.dart';
 import 'package:ace/match_manager/match_config.dart';
@@ -17,6 +18,7 @@ class MatchRunner {
     required String engineAName,
     required String engineBName,
     required List<String> openingBookWarnings,
+    void Function(GameRecord record, MatchStats stats)? onGameFinished,
   }) async {
     // Initialize output directory
     _output = MatchOutput.create(config, engineAName: engineAName, engineBName: engineBName);
@@ -50,6 +52,7 @@ class MatchRunner {
 
         stats.add(record);
         _output.addGame(record);
+        onGameFinished?.call(record, stats);
       }
     }
 

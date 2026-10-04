@@ -1,7 +1,8 @@
 import 'dart:async';
 
-import 'package:ace/chess_core/rules/board.dart';
-import 'package:ace/chess_core/rules/move_generator.dart';
+import 'package:ace/engines/v1/core/board.dart';
+import 'package:ace/engines/v1/core/move_generator.dart';
+import 'package:ace/engines/v1/v1_engine.dart';
 import 'package:ace/engines/engine_interface.dart';
 import 'package:ace/engines/engine_registry.dart';
 import 'package:ace/chess_core/notation/fen.dart';
@@ -16,10 +17,10 @@ final _ownLegalMoves = <String, Set<String> Function(String fen, List<String> uc
     final board = Board.fromFEN(fen);
     for (final uciMove in uciMoves) {
       board.makeMove(
-        MoveGenerator().generateLegalMoves(board).firstWhere((m) => V0Engine().moveToUci(m) == uciMove),
+        MoveGenerator().generateLegalMoves(board).firstWhere((m) => V1Engine().moveToUci(m) == uciMove),
       );
     }
-    return MoveGenerator().generateLegalMoves(board).map((m) => V0Engine().moveToUci(m)).toSet();
+    return MoveGenerator().generateLegalMoves(board).map((m) => V1Engine().moveToUci(m)).toSet();
   },
 };
 

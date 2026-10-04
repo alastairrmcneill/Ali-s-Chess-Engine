@@ -22,7 +22,7 @@ class ScriptedEngine implements ChessEngine {
     String startingFen,
     List<String> uciMoves,
     SearchLimits limits, {
-    SearchProgressCallback? onIteration,
+    SearchProgressCallback? onSearchProgressUpdate,
   }) {
     if (_next >= moves.length) {
       throw StateError('ScriptedEngine ran out of scripted moves');
@@ -50,7 +50,7 @@ class IllegalEngine implements ChessEngine {
     String startingFen,
     List<String> uciMoves,
     SearchLimits limits, {
-    SearchProgressCallback? onIteration,
+    SearchProgressCallback? onSearchProgressUpdate,
   }) =>
       EngineMoveResult(uciMove: 'a1a1');
 
@@ -74,7 +74,7 @@ class CrashingEngine implements ChessEngine {
     String startingFen,
     List<String> uciMoves,
     SearchLimits limits, {
-    SearchProgressCallback? onIteration,
+    SearchProgressCallback? onSearchProgressUpdate,
   }) {
     throw Exception('boom');
   }
@@ -99,7 +99,7 @@ class MalformedEngine implements ChessEngine {
     String startingFen,
     List<String> uciMoves,
     SearchLimits limits, {
-    SearchProgressCallback? onIteration,
+    SearchProgressCallback? onSearchProgressUpdate,
   }) =>
       EngineMoveResult(uciMove: 'xyz');
 
@@ -123,7 +123,7 @@ class NoMoveEngine implements ChessEngine {
     String startingFen,
     List<String> uciMoves,
     SearchLimits limits, {
-    SearchProgressCallback? onIteration,
+    SearchProgressCallback? onSearchProgressUpdate,
   }) =>
       EngineMoveResult(uciMove: '');
 
@@ -156,10 +156,10 @@ class CountingEngine implements ChessEngine {
     String startingFen,
     List<String> uciMoves,
     SearchLimits limits, {
-    SearchProgressCallback? onIteration,
+    SearchProgressCallback? onSearchProgressUpdate,
   }) {
     getMoveCalls++;
-    return inner.getMove(startingFen, uciMoves, limits, onIteration: onIteration);
+    return inner.getMove(startingFen, uciMoves, limits, onSearchProgressUpdate: onSearchProgressUpdate);
   }
 
   @override

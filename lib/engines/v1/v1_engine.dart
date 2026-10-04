@@ -1,18 +1,23 @@
 import 'package:ace/chess_core/notation/uci.dart';
 import 'package:ace/engines/engine_interface.dart';
-import 'package:ace/engines/v0/core/move.dart';
-import 'package:ace/engines/v0/core/board.dart';
-import 'package:ace/engines/v0/core/move_generator.dart';
+import 'package:ace/engines/v1/core/move.dart';
+import 'package:ace/engines/v1/core/board.dart';
+import 'package:ace/engines/v1/core/move_generator.dart';
+import 'package:ace/engines/v1/search/searcher.dart';
 
-class V0Engine implements ChessEngine {
-  @override
-  String get id => 'v0';
-
-  @override
-  String get displayName => 'v0 Engine';
+class V1Engine implements ChessEngine {
+  late Searcher searcher;
 
   @override
-  void newGame() {}
+  String get id => 'v1';
+
+  @override
+  String get displayName => 'v1 Engine';
+
+  @override
+  void newGame() {
+    searcher = Searcher();
+  }
 
   @override
   EngineMoveResult getMove(
@@ -33,19 +38,21 @@ class V0Engine implements ChessEngine {
         }
       }
       if (legalMove == null) {
-        throw StateError('v0 move generator does not consider "$uciMove" a legal move');
+        throw StateError('v1 move generator does not consider "$uciMove" a legal move');
       }
       board.makeMove(legalMove);
     }
 
-    final legalMoves = moveGenerator.generateLegalMoves(board);
+    final nextMove = searcher.getBestMove(board, timeLimit: limits.moveTime);
 
-    legalMoves.shuffle();
+    if (nextMove == null) {
+      throw Exception('No valid move found');
+    }
 
     return EngineMoveResult(
-      uciMove: moveToUci(legalMoves.first),
-      evaluation: 0,
-      nodes: 0,
+      uciMove: moveToUci(nextMove),
+      evaluation: board.whiteToPlay ? searcher.bestEval : -searcher.bestEval,
+      nodes: searcher.nodes,
     );
   }
 

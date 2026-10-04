@@ -88,12 +88,12 @@ abstract class ChessEngine {
 
   void newGame();
 
-  /// Blocks until the search is done. Engines that search iteratively call [onIteration] after each step.
+  /// Blocks until the search is done. Engines that search iteratively call [onSearchProgressUpdate] after each step.
   EngineMoveResult getMove(
     String startingFen,
     List<String> uciMoves,
     SearchLimits limits, {
-    SearchProgressCallback? onIteration,
+    SearchProgressCallback? onSearchProgressUpdate,
   });
 
   int perft(String fen, int depth);
