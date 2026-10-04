@@ -1,12 +1,14 @@
 import 'package:ace/engines/engine_interface.dart';
 import 'package:ace/engines/v0/v0_engine.dart';
 import 'package:ace/engines/v1/v1_engine.dart';
+import 'package:ace/engines/v2/v2_engine.dart';
 
 class EngineRegistry {
   /// Real engine versions, ordered oldest → newest. Add a line per new version.
   static final Map<String, ChessEngine Function()> _versions = {
     'v0': () => V0Engine(),
-    'v1 - Negamax': () => V1Engine(),
+    'v1': () => V1Engine(),
+    'v2': () => V2Engine(),
   };
 
   static List<String> get allIds => _versions.keys.toList();

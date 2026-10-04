@@ -1,21 +1,23 @@
 import 'package:ace/chess_core/notation/uci.dart';
 import 'package:ace/engines/engine_interface.dart';
-import 'package:ace/engines/v1/core/move.dart';
-import 'package:ace/engines/v1/core/board.dart';
-import 'package:ace/engines/v1/core/move_generator.dart';
-import 'package:ace/engines/v1/search/searcher.dart';
+import 'package:ace/engines/v2/core/move.dart';
+import 'package:ace/engines/v2/core/board.dart';
+import 'package:ace/engines/v2/core/move_generator.dart';
+import 'package:ace/engines/v2/core/zobrist.dart';
+import 'package:ace/engines/v2/search/searcher.dart';
 
-class V1Engine implements ChessEngine {
+class V2Engine implements ChessEngine {
   late Searcher searcher;
 
   @override
-  String get id => 'v1';
+  String get id => 'v2';
 
   @override
-  String get displayName => 'v1 - Plain Negamax';
+  String get displayName => 'V2 - Alpha Beta Pruning';
 
   @override
   void newGame() {
+    Zobrist.ensureInitialised();
     searcher = Searcher();
   }
 
@@ -26,6 +28,7 @@ class V1Engine implements ChessEngine {
     SearchLimits limits, {
     SearchProgressCallback? onSearchProgressUpdate,
   }) {
+    Zobrist.ensureInitialised();
     final board = Board.fromFEN(startingFen);
     final moveGenerator = MoveGenerator();
 
@@ -38,7 +41,7 @@ class V1Engine implements ChessEngine {
         }
       }
       if (legalMove == null) {
-        throw StateError('v1 move generator does not consider "$uciMove" a legal move');
+        throw StateError('v2 move generator does not consider "$uciMove" a legal move');
       }
       board.makeMove(legalMove);
     }

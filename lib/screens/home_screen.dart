@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:ace/engines/engine_registry.dart';
 import 'package:ace/providers/game_provider.dart';
 import 'package:ace/screens/game_screen.dart';
-import 'package:ace/screens/v1_test_screen.dart';
+import 'package:ace/screens/v2_test_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -126,7 +126,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const V1TestScreen())),
+                    onPressed: () =>
+                        Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const V2TestScreen())),
                     icon: const Icon(Icons.speed_rounded),
                     label: const Text('v1 depth test'),
                   ),
