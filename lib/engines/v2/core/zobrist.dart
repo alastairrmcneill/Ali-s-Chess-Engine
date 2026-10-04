@@ -42,6 +42,15 @@ class Zobrist {
 
     // Setup
     sideToMove = generateRandom64BitNumber();
+    _initialised = true;
+  }
+
+  static bool _initialised = false;
+
+  /// The tables are static and all zero until a [Zobrist] is constructed. Call this before any Board is
+  /// built so every key is real. Each isolate has its own statics, so each one needs this once.
+  static void ensureInitialised() {
+    if (!_initialised) Zobrist();
   }
 
   static int getZobristForBoard(Board board) {

@@ -12,7 +12,7 @@ class V1Engine implements ChessEngine {
   String get id => 'v1';
 
   @override
-  String get displayName => 'v1 Engine';
+  String get displayName => 'v1 - Plain Negamax';
 
   @override
   void newGame() {

@@ -3,16 +3,16 @@ import 'dart:isolate';
 import 'package:ace/chess_core/notation/board_helper.dart';
 import 'package:ace/components/piece_image.dart';
 import 'package:ace/components/square.dart';
-import 'package:ace/engines/v1/core/board.dart';
-import 'package:ace/engines/v1/core/move.dart';
-import 'package:ace/engines/v1/core/move_generator.dart';
-import 'package:ace/engines/v1/core/piece.dart';
-import 'package:ace/engines/v1/core/zobrist.dart';
-import 'package:ace/engines/v1/search/searcher.dart';
-import 'package:ace/engines/v1/v1_engine.dart';
+import 'package:ace/engines/v2/core/board.dart';
+import 'package:ace/engines/v2/core/move.dart';
+import 'package:ace/engines/v2/core/move_generator.dart';
+import 'package:ace/engines/v2/core/piece.dart';
+import 'package:ace/engines/v2/core/zobrist.dart';
+import 'package:ace/engines/v2/search/searcher.dart';
+import 'package:ace/engines/v2/v2_engine.dart';
 import 'package:flutter/material.dart';
 
-const _startFen = 'r3k3/8/8/8/8/8/5PPP/6K1 b - - 0 1';
+const _startFen = 'r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1';
 
 class _SearchResult {
   final int nodes;
@@ -24,7 +24,7 @@ class _SearchResult {
   const _SearchResult(this.nodes, this.eval, this.elapsed, this.bestMove, this.depth);
 }
 
-String _uci(Move move) => V1Engine().moveToUci(move);
+String _uci(Move move) => V2Engine().moveToUci(move);
 
 /// Builds the position after [uciMoves] from [startFen]. Throws if a move is not legal.
 Board _replay(String startFen, List<String> uciMoves) {
@@ -67,14 +67,14 @@ String? _fenProblem(String fen) {
   return null;
 }
 
-class V1TestScreen extends StatefulWidget {
-  const V1TestScreen({super.key});
+class V2TestScreen extends StatefulWidget {
+  const V2TestScreen({super.key});
 
   @override
-  State<V1TestScreen> createState() => _V1TestScreenState();
+  State<V2TestScreen> createState() => _V2TestScreenState();
 }
 
-class _V1TestScreenState extends State<V1TestScreen> {
+class _V2TestScreenState extends State<V2TestScreen> {
   final _fenController = TextEditingController(text: _startFen);
   final _generator = MoveGenerator();
 
@@ -323,13 +323,13 @@ class _V1TestScreenState extends State<V1TestScreen> {
     final over = _gameOver;
     final status = over ??
         (_thinking
-            ? 'v1 thinking...'
+            ? 'v2 thinking...'
             : _whiteToPlay == _playerIsWhite
                 ? 'Your move'
-                : 'v1 to move');
+                : 'v2 to move');
 
     return Scaffold(
-      appBar: AppBar(title: const Text('v1 test')),
+      appBar: AppBar(title: const Text('v2 test')),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(

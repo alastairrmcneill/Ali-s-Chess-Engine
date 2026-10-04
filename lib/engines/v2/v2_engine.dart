@@ -3,6 +3,7 @@ import 'package:ace/engines/engine_interface.dart';
 import 'package:ace/engines/v2/core/move.dart';
 import 'package:ace/engines/v2/core/board.dart';
 import 'package:ace/engines/v2/core/move_generator.dart';
+import 'package:ace/engines/v2/core/zobrist.dart';
 import 'package:ace/engines/v2/search/searcher.dart';
 
 class V2Engine implements ChessEngine {
@@ -12,10 +13,11 @@ class V2Engine implements ChessEngine {
   String get id => 'v2';
 
   @override
-  String get displayName => 'v2 Engine';
+  String get displayName => 'V2 - Alpha Beta Pruning';
 
   @override
   void newGame() {
+    Zobrist.ensureInitialised();
     searcher = Searcher();
   }
 
@@ -26,6 +28,7 @@ class V2Engine implements ChessEngine {
     SearchLimits limits, {
     SearchProgressCallback? onSearchProgressUpdate,
   }) {
+    Zobrist.ensureInitialised();
     final board = Board.fromFEN(startingFen);
     final moveGenerator = MoveGenerator();
 

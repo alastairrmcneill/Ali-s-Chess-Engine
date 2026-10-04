@@ -37,6 +37,7 @@ class Board {
     gameStateHistory = [];
     fiftyMoveRule = fenPosition.halfmoveClock;
     plyCount = (fenPosition.fullmoveNumber - 1) * 2 + (whiteToPlay ? 0 : 1);
+    addMoveToHashHistory(zobristKey); // The starting position counts as seen once
   }
 
   makeMove(Move move) {
