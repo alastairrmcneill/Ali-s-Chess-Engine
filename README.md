@@ -13,5 +13,7 @@ A.C.E. is a collection of chess engines that get progressively better:
 
 **v0** - Random move selection  
 **v1** - Implements a plain negamax algorithm
+**v2** - Adds in alpha beta pruning (+38 ELO)
+**v3** - Move ordering to improve pruning (+28 ELO)
 
 This project was inspired by an excellent video by Sebastian Lague [here](https://youtu.be/U4ogK0MIzqk?si=Cy8-raNohwVjh4E-).
