@@ -1,19 +1,19 @@
 import 'package:ace/chess_core/notation/uci.dart';
 import 'package:ace/engines/engine_interface.dart';
-import 'package:ace/engines/v2/core/move.dart';
-import 'package:ace/engines/v2/core/board.dart';
-import 'package:ace/engines/v2/core/move_generator.dart';
-import 'package:ace/engines/v2/core/zobrist.dart';
-import 'package:ace/engines/v2/search/searcher.dart';
+import 'package:ace/engines/v3/core/move.dart';
+import 'package:ace/engines/v3/core/board.dart';
+import 'package:ace/engines/v3/core/move_generator.dart';
+import 'package:ace/engines/v3/core/zobrist.dart';
+import 'package:ace/engines/v3/search/searcher.dart';
 
-class V2Engine implements ChessEngine {
+class V3Engine implements ChessEngine {
   late Searcher searcher;
 
   @override
-  String get id => 'v2';
+  String get id => 'v3';
 
   @override
-  String get displayName => 'V2 - Alpha Beta Pruning';
+  String get displayName => 'V3 - Move Ordering';
 
   @override
   void newGame() {
@@ -41,7 +41,7 @@ class V2Engine implements ChessEngine {
         }
       }
       if (legalMove == null) {
-        throw StateError('v2 move generator does not consider "$uciMove" a legal move');
+        throw StateError('v3 move generator does not consider "$uciMove" a legal move');
       }
       board.makeMove(legalMove);
     }

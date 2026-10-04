@@ -43,7 +43,9 @@ class V1Engine implements ChessEngine {
       board.makeMove(legalMove);
     }
 
-    final nextMove = searcher.getBestMove(board, timeLimit: limits.moveTime);
+    final nextMove = limits.depth == null
+        ? searcher.getBestMove(board, timeLimit: limits.moveTime)
+        : searcher.getBestMove(board, depth: limits.depth!);
 
     if (nextMove == null) {
       throw Exception('No valid move found');
@@ -52,6 +54,7 @@ class V1Engine implements ChessEngine {
     return EngineMoveResult(
       uciMove: moveToUci(nextMove),
       evaluation: board.whiteToPlay ? searcher.bestEval : -searcher.bestEval,
+      depth: limits.depth,
       nodes: searcher.nodes,
     );
   }

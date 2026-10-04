@@ -66,10 +66,10 @@ class GameRunner {
           referee.uciHistory,
           searchLimits,
         );
-      } catch (e) {
+      } catch (e, st) {
         return record(
           GameEnd(outcome: moverLoses, termination: GameTermination.engineError, detail: e.toString()),
-          e.toString(),
+          '$e\n$st',
         );
       }
       sw.stop();

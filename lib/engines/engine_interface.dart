@@ -1,7 +1,10 @@
 class SearchLimits {
   final Duration moveTime;
 
-  SearchLimits({required this.moveTime});
+  /// Fixed search depth. When set, engines that support it search exactly this deep and ignore [moveTime].
+  final int? depth;
+
+  SearchLimits({required this.moveTime, this.depth});
 }
 
 /// What one iterative deepening step concluded, plus the engine's counters at that point.

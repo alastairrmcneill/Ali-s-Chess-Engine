@@ -1,34 +1,44 @@
 import 'dart:isolate';
 
 import 'package:ace/chess_core/notation/board_helper.dart';
+import 'package:ace/chess_core/notation/uci.dart';
+import 'package:ace/chess_core/rules/board.dart';
+import 'package:ace/chess_core/rules/move.dart';
+import 'package:ace/chess_core/rules/move_generator.dart';
+import 'package:ace/chess_core/notation/piece.dart';
+import 'package:ace/chess_core/rules/zobrist.dart';
 import 'package:ace/components/piece_image.dart';
 import 'package:ace/components/square.dart';
-import 'package:ace/engines/v2/core/board.dart';
-import 'package:ace/engines/v2/core/move.dart';
-import 'package:ace/engines/v2/core/move_generator.dart';
-import 'package:ace/engines/v2/core/piece.dart';
-import 'package:ace/engines/v2/core/zobrist.dart';
-import 'package:ace/engines/v2/search/searcher.dart';
-import 'package:ace/engines/v2/v2_engine.dart';
+import 'package:ace/engines/engine_interface.dart';
+import 'package:ace/engines/engine_registry.dart';
 import 'package:flutter/material.dart';
 
 const _startFen = 'r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1';
 
 class _SearchResult {
-  final int nodes;
-  final int eval;
+  final int? nodes;
+  final int? eval; // centipawns, white's point of view
   final Duration elapsed;
-  final String? bestMove;
-  final int depth;
+  final String bestMove;
+  final int? depth;
 
   const _SearchResult(this.nodes, this.eval, this.elapsed, this.bestMove, this.depth);
 }
 
-String _uci(Move move) => V2Engine().moveToUci(move);
+bool _zobristReady = false;
+
+String _uci(Move move) => UciMove(
+      from: move.startingSquare,
+      to: move.targetSquare,
+      promotion: move.promotion == 0 ? null : ' qnrb'[move.promotion],
+    ).toString();
 
 /// Builds the position after [uciMoves] from [startFen]. Throws if a move is not legal.
 Board _replay(String startFen, List<String> uciMoves) {
-  Zobrist();
+  if (!_zobristReady) {
+    Zobrist();
+    _zobristReady = true;
+  }
   final board = Board.fromFEN(startFen);
   final generator = MoveGenerator();
   for (final uci in uciMoves) {
@@ -39,18 +49,17 @@ Board _replay(String startFen, List<String> uciMoves) {
   return board;
 }
 
-_SearchResult _runSearch(String startFen, List<String> uciMoves, int depth) {
-  final board = _replay(startFen, uciMoves);
-  final searcher = Searcher();
+_SearchResult _runSearch(String engineId, String startFen, List<String> uciMoves, int depth) {
+  final engine = EngineRegistry.create(engineId)..newGame();
   final stopwatch = Stopwatch()..start();
-  final move = searcher.getBestMove(board, depth: depth);
+  final result = engine.getMove(startFen, uciMoves, SearchLimits(moveTime: const Duration(minutes: 10), depth: depth));
   stopwatch.stop();
-  return _SearchResult(searcher.nodes, searcher.bestEval, stopwatch.elapsed, move == null ? null : _uci(move), depth);
+  return _SearchResult(result.nodes, result.evaluation, stopwatch.elapsed, result.uciMove, result.depth);
 }
 
 /// Top level so the isolate closure cannot capture the widget state, which is not sendable.
-Future<_SearchResult> _searchInIsolate(String startFen, List<String> uciMoves, int depth) =>
-    Isolate.run(() => _runSearch(startFen, uciMoves, depth));
+Future<_SearchResult> _searchInIsolate(String engineId, String startFen, List<String> uciMoves, int depth) =>
+    Isolate.run(() => _runSearch(engineId, startFen, uciMoves, depth));
 
 String? _fenProblem(String fen) {
   final parts = fen.split(' ');
@@ -67,14 +76,16 @@ String? _fenProblem(String fen) {
   return null;
 }
 
-class V2TestScreen extends StatefulWidget {
-  const V2TestScreen({super.key});
+class EngineTestScreen extends StatefulWidget {
+  final String engineId;
+
+  const EngineTestScreen({super.key, required this.engineId});
 
   @override
-  State<V2TestScreen> createState() => _V2TestScreenState();
+  State<EngineTestScreen> createState() => _EngineTestScreenState();
 }
 
-class _V2TestScreenState extends State<V2TestScreen> {
+class _EngineTestScreenState extends State<EngineTestScreen> {
   final _fenController = TextEditingController(text: _startFen);
   final _generator = MoveGenerator();
 
@@ -107,6 +118,8 @@ class _V2TestScreenState extends State<V2TestScreen> {
     _fenController.dispose();
     super.dispose();
   }
+
+  String get _engineName => EngineRegistry.create(widget.engineId).displayName;
 
   bool get _whiteToPlay => _board.whiteToPlay;
   bool get _humanTurn => !_thinking && _legalMoves.isNotEmpty && _whiteToPlay == _playerIsWhite;
@@ -190,7 +203,7 @@ class _V2TestScreenState extends State<V2TestScreen> {
       _error = null;
     });
     try {
-      final result = await _searchInIsolate(startFen, moves, depth);
+      final result = await _searchInIsolate(widget.engineId, startFen, moves, depth);
       if (!mounted || generation != _generation) return;
       final move = _legalMoves.where((m) => _uci(m) == result.bestMove).firstOrNull;
       _result = result;
@@ -323,13 +336,13 @@ class _V2TestScreenState extends State<V2TestScreen> {
     final over = _gameOver;
     final status = over ??
         (_thinking
-            ? 'v2 thinking...'
+            ? '${widget.engineId} thinking...'
             : _whiteToPlay == _playerIsWhite
                 ? 'Your move'
-                : 'v2 to move');
+                : '${widget.engineId} to move');
 
     return Scaffold(
-      appBar: AppBar(title: const Text('v2 test')),
+      appBar: AppBar(title: Text('$_engineName test')),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -372,9 +385,9 @@ class _V2TestScreenState extends State<V2TestScreen> {
                           Expanded(
                             child: Column(
                               children: [
-                                _row(theme, 'Depth', result == null ? '-' : '${result.depth}'),
+                                _row(theme, 'Depth', result == null ? '-' : '${result.depth ?? '-'}'),
                                 _row(theme, 'Time', result == null ? '-' : '${result.elapsed.inMilliseconds} ms'),
-                                _row(theme, 'Nodes', result == null ? '-' : '${result.nodes}'),
+                                _row(theme, 'Nodes', result == null ? '-' : '${result.nodes ?? '-'}'),
                               ],
                             ),
                           ),
@@ -384,7 +397,7 @@ class _V2TestScreenState extends State<V2TestScreen> {
                               children: [
                                 _row(theme, 'Nodes/s', result == null ? '-' : _nps(result)),
                                 _row(theme, 'Best move', result?.bestMove ?? '-'),
-                                _row(theme, 'Eval', result == null ? '-' : '${result.eval}'),
+                                _row(theme, 'Eval', result == null ? '-' : '${result.eval ?? '-'}'),
                               ],
                             ),
                           ),
@@ -494,7 +507,8 @@ class _V2TestScreenState extends State<V2TestScreen> {
 
   String _nps(_SearchResult r) {
     final seconds = r.elapsed.inMicroseconds / 1e6;
-    return seconds == 0 ? '-' : (r.nodes / seconds).round().toString();
+    final nodes = r.nodes;
+    return seconds == 0 || nodes == null ? '-' : (nodes / seconds).round().toString();
   }
 
   Widget _row(ThemeData theme, String label, String value) => Padding(

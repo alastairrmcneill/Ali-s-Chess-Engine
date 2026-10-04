@@ -53,9 +53,12 @@ class _GameScreenState extends State<GameScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Game over'),
-        content: Text(describe(end, game.playerIsWhite) + (end.detail == null ? '' : '\n${end.detail}')),
+        content: Text(describe(end, game.playerIsWhite) +
+            (end.detail == null ? '' : '\n${end.detail}')),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('View board')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('View board')),
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
@@ -86,14 +89,17 @@ class _GameScreenState extends State<GameScreen> {
               Navigator.of(context).pop();
               game.restart();
             },
-            child: const ListTile(leading: Icon(Icons.refresh_rounded), title: Text('Restart match')),
+            child: const ListTile(
+                leading: Icon(Icons.refresh_rounded),
+                title: Text('Restart match')),
           ),
           SimpleDialogOption(
             onPressed: () {
               Navigator.of(context).pop();
               Navigator.of(this.context).pop();
             },
-            child: const ListTile(leading: Icon(Icons.home_rounded), title: Text('Exit to home')),
+            child: const ListTile(
+                leading: Icon(Icons.home_rounded), title: Text('Exit to home')),
           ),
         ],
       ),
@@ -126,7 +132,10 @@ class _GameScreenState extends State<GameScreen> {
           child: Text(_status(game), style: theme.textTheme.titleMedium),
         ),
         if (game.engineThinking)
-          const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+          const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2)),
       ],
     );
 
@@ -150,7 +159,8 @@ class _GameScreenState extends State<GameScreen> {
             const padding = 16.0;
 
             if (wide) {
-              final boardSize = (constraints.maxHeight - 2 * padding - 40).clamp(200.0, constraints.maxWidth * 0.6);
+              final boardSize = (constraints.maxHeight - 2 * padding - 40)
+                  .clamp(200.0, constraints.maxWidth * 0.6);
               return Padding(
                 padding: const EdgeInsets.all(padding),
                 child: Row(
@@ -160,11 +170,16 @@ class _GameScreenState extends State<GameScreen> {
                       width: boardSize,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [header, const SizedBox(height: 12), const BoardView()],
+                        children: [
+                          header,
+                          const SizedBox(height: 12),
+                          const BoardView()
+                        ],
                       ),
                     ),
                     const SizedBox(width: 24),
-                    const Expanded(child: SingleChildScrollView(child: StatsPanel())),
+                    const Expanded(
+                        child: SingleChildScrollView(child: StatsPanel())),
                   ],
                 ),
               );
