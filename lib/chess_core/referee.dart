@@ -1,12 +1,12 @@
 import 'package:ace/chess_core/game_end.dart';
 import 'package:ace/chess_core/notation/fen.dart';
+import 'package:ace/chess_core/notation/piece.dart';
 import 'package:ace/chess_core/notation/san.dart';
 import 'package:ace/chess_core/notation/uci.dart';
 import 'package:ace/chess_core/rules/board.dart';
 import 'package:ace/chess_core/rules/move.dart';
 import 'package:ace/chess_core/rules/move_generator.dart';
 import 'package:ace/chess_core/rules/zobrist.dart';
-import 'package:ace/engines/v1/core/piece.dart';
 
 class Referee {
   final String startFen;

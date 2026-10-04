@@ -1,6 +1,6 @@
+import 'package:ace/chess_core/notation/piece.dart';
 import 'package:ace/chess_core/rules/move.dart';
 import 'package:ace/chess_core/notation/board_helper.dart';
-import 'package:ace/engines/v1/core/piece.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
