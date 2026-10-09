@@ -46,13 +46,24 @@ class V4Engine implements ChessEngine {
       board.makeMove(legalMove);
     }
 
+    final stopwatch = Stopwatch()..start();
     final nextMove = limits.depth == null
         ? searcher.getBestMove(board, timeLimit: limits.moveTime)
         : searcher.getBestMove(board, depth: limits.depth!);
+    stopwatch.stop();
 
     if (nextMove == null) {
       throw Exception('No valid move found');
     }
+
+    // There is no iterative deepening yet, so the whole search is reported as a single step.
+    searcher.stats
+      ..depth = limits.depth
+      ..eval = searcher.bestEval
+      ..bestMove = moveToUci(nextMove)
+      ..elapsed = stopwatch.elapsed
+      ..aborted = searcher.aborted;
+    onSearchProgressUpdate?.call(searcher.stats);
 
     return EngineMoveResult(
       uciMove: moveToUci(nextMove),
