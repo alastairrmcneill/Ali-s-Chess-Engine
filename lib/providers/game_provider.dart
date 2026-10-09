@@ -18,9 +18,12 @@ import 'package:flutter/foundation.dart';
 class GameSettings {
   final String engineId;
   final Duration moveTime;
+
+  /// Fixed search depth. When set the engine ignores [moveTime].
+  final int? depth;
   final bool playerIsWhite;
 
-  const GameSettings({required this.engineId, required this.moveTime, required this.playerIsWhite});
+  const GameSettings({required this.engineId, required this.moveTime, this.depth, required this.playerIsWhite});
 
   String get engineName => EngineRegistry.create(engineId).displayName;
 }
@@ -193,7 +196,12 @@ class GameProvider extends ChangeNotifier {
 
     final sw = Stopwatch()..start();
     try {
-      final result = await worker.search(_referee.startFen, List.of(_referee.uciHistory), _settings!.moveTime);
+      final result = await worker.search(
+        _referee.startFen,
+        List.of(_referee.uciHistory),
+        _settings!.moveTime,
+        depth: _settings!.depth,
+      );
       if (generation != _generation) return;
       _engineThinking = false;
       _searchesCompleted++;

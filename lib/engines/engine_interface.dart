@@ -10,27 +10,35 @@ class SearchLimits {
 /// What one iterative deepening step concluded, plus the engine's counters at that point.
 /// Engine-agnostic: plain ints and UCI strings only.
 class SearchStats {
-  final int? depth; // iterative deepening depth this step searched
-  final int nodes;
-  final int qNodes;
-  final int transpositions;
-  final int maxQDepth;
-  final int evaluations;
-  final int? eval; // centipawns from the side to move's point of view
-  final String? bestMove; // UCI
-  final List<String> pv; // UCI, best effort; may be empty
-  final Duration elapsed; // since the search started
-  final bool aborted; // the step ran out of time before finishing
+  int? depth = 0; // iterative deepening depth this step searched
+  int nodes = 0;
+  int qNodes = 0;
+  int transpositions = 0;
+  int maxQDepth = 0;
+  int evaluations = 0;
+  int betaCutoffs = 0;
+  int qBetaCutoffs = 0;
+  int qCheckNodes = 0; // quiescence nodes where the side to move was in check
+  int firstMoveCutoffs = 0; // beta cutoffs where the first move tried was the cutting one  = 0; measures move ordering
+  int? eval = 0; // centipawns from the side to move's point of view
+  String? bestMove = ''; // UCI
+  List<String> pv = const []; // UCI, best effort; may be empty
+  Duration elapsed = Duration.zero; // since the search started
+  bool aborted = false; // the step ran out of time before finishing
 
-  const SearchStats({
-    this.depth,
-    required this.nodes,
-    required this.qNodes,
-    required this.transpositions,
-    required this.maxQDepth,
-    required this.evaluations,
-    this.eval,
-    this.bestMove,
+  SearchStats({
+    this.depth = 0,
+    this.nodes = 0,
+    this.qNodes = 0,
+    this.transpositions = 0,
+    this.maxQDepth = 0,
+    this.evaluations = 0,
+    this.betaCutoffs = 0,
+    this.qBetaCutoffs = 0,
+    this.qCheckNodes = 0,
+    this.firstMoveCutoffs = 0,
+    this.eval = 0,
+    this.bestMove = '',
     this.pv = const [],
     this.elapsed = Duration.zero,
     this.aborted = false,
@@ -46,6 +54,10 @@ class SearchStats {
         transpositions: json['transpositions'] as int,
         maxQDepth: json['maxQDepth'] as int,
         evaluations: json['evaluations'] as int,
+        betaCutoffs: json['betaCutoffs'] as int? ?? 0,
+        qBetaCutoffs: json['qBetaCutoffs'] as int? ?? 0,
+        qCheckNodes: json['qCheckNodes'] as int? ?? 0,
+        firstMoveCutoffs: json['firstMoveCutoffs'] as int? ?? 0,
         elapsed: Duration(milliseconds: json['timeMs'] as int),
         aborted: json['aborted'] as bool,
       );
@@ -60,6 +72,10 @@ class SearchStats {
         'transpositions': transpositions,
         'maxQDepth': maxQDepth,
         'evaluations': evaluations,
+        'betaCutoffs': betaCutoffs,
+        'qBetaCutoffs': qBetaCutoffs,
+        'qCheckNodes': qCheckNodes,
+        'firstMoveCutoffs': firstMoveCutoffs,
         'timeMs': elapsed.inMilliseconds,
         'aborted': aborted,
       };
@@ -74,6 +90,7 @@ class EngineMoveResult {
   final int? depth; // last fully completed iterative deepening depth
   final int? nodes; // number of nodes searched by the engine
   final List<String>? principalVariation; // UCI, the line the engine expects to be played
+  final SearchStats? stats; // counters for the whole search, when the engine collects them
 
   EngineMoveResult({
     required this.uciMove,
@@ -81,6 +98,7 @@ class EngineMoveResult {
     this.depth,
     this.nodes,
     this.principalVariation,
+    this.stats,
   });
 }
 
@@ -99,5 +117,12 @@ abstract class ChessEngine {
     SearchProgressCallback? onSearchProgressUpdate,
   });
 
-  int perft(String fen, int depth);
+  PerftTestResult perft(String fen, int depth);
+}
+
+class PerftTestResult {
+  int nodes;
+  int? captures;
+
+  PerftTestResult(this.nodes, {this.captures});
 }

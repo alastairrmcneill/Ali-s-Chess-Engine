@@ -9,6 +9,8 @@ import 'package:provider/provider.dart';
 
 enum _SideChoice { white, black, random }
 
+enum _LimitMode { time, depth }
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -19,6 +21,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String _engineId = EngineRegistry.latestId;
   double _seconds = 1.0;
+  _LimitMode _limitMode = _LimitMode.time;
+  int _depth = 4;
   _SideChoice _side = _SideChoice.white;
   bool _starting = false;
 
@@ -34,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await game.startGame(GameSettings(
       engineId: _engineId,
       moveTime: Duration(milliseconds: (_seconds * 1000).round()),
+      depth: _limitMode == _LimitMode.depth ? _depth : null,
       playerIsWhite: playerIsWhite,
     ));
 
@@ -86,19 +91,46 @@ class _HomeScreenState extends State<HomeScreen> {
                             onChanged: (id) => setState(() => _engineId = id ?? _engineId),
                           ),
                           const SizedBox(height: 24),
-                          Row(
-                            children: [
-                              Expanded(child: _label(theme, 'Thinking time')),
-                              Text('${_seconds.toStringAsFixed(1)} s', style: theme.textTheme.titleSmall),
+                          _label(theme, 'Engine limit'),
+                          SegmentedButton<_LimitMode>(
+                            showSelectedIcon: false,
+                            segments: const [
+                              ButtonSegment(value: _LimitMode.time, label: Text('Time')),
+                              ButtonSegment(value: _LimitMode.depth, label: Text('Fixed depth')),
                             ],
+                            selected: {_limitMode},
+                            onSelectionChanged: (s) => setState(() => _limitMode = s.first),
                           ),
-                          Slider(
-                            value: _seconds,
-                            min: 0.1,
-                            max: 5.0,
-                            divisions: 49,
-                            onChanged: (v) => setState(() => _seconds = double.parse(v.toStringAsFixed(1))),
-                          ),
+                          const SizedBox(height: 12),
+                          if (_limitMode == _LimitMode.time) ...[
+                            Row(
+                              children: [
+                                Expanded(child: _label(theme, 'Thinking time')),
+                                Text('${_seconds.toStringAsFixed(1)} s', style: theme.textTheme.titleSmall),
+                              ],
+                            ),
+                            Slider(
+                              value: _seconds,
+                              min: 0.1,
+                              max: 5.0,
+                              divisions: 49,
+                              onChanged: (v) => setState(() => _seconds = double.parse(v.toStringAsFixed(1))),
+                            ),
+                          ] else ...[
+                            Row(
+                              children: [
+                                Expanded(child: _label(theme, 'Search depth')),
+                                Text('$_depth', style: theme.textTheme.titleSmall),
+                              ],
+                            ),
+                            Slider(
+                              value: _depth.toDouble(),
+                              min: 1,
+                              max: 8,
+                              divisions: 7,
+                              onChanged: (v) => setState(() => _depth = v.round()),
+                            ),
+                          ],
                           const SizedBox(height: 12),
                           _label(theme, 'Play as'),
                           SegmentedButton<_SideChoice>(

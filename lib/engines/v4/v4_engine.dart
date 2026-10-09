@@ -1,19 +1,19 @@
 import 'package:ace/chess_core/notation/uci.dart';
 import 'package:ace/engines/engine_interface.dart';
-import 'package:ace/engines/v2/core/move.dart';
-import 'package:ace/engines/v2/core/board.dart';
-import 'package:ace/engines/v2/core/move_generator.dart';
-import 'package:ace/engines/v2/core/zobrist.dart';
-import 'package:ace/engines/v2/search/searcher.dart';
+import 'package:ace/engines/v4/core/move.dart';
+import 'package:ace/engines/v4/core/board.dart';
+import 'package:ace/engines/v4/core/move_generator.dart';
+import 'package:ace/engines/v4/core/zobrist.dart';
+import 'package:ace/engines/v4/search/searcher.dart';
 
-class V2Engine implements ChessEngine {
+class V4Engine implements ChessEngine {
   late Searcher searcher;
 
   @override
-  String get id => 'v2';
+  String get id => 'v4';
 
   @override
-  String get displayName => 'V2 - Alpha Beta Pruning';
+  String get displayName => 'V4 - Quiescence';
 
   @override
   void newGame() {
@@ -41,43 +41,64 @@ class V2Engine implements ChessEngine {
         }
       }
       if (legalMove == null) {
-        throw StateError('v2 move generator does not consider "$uciMove" a legal move');
+        throw StateError('v4 move generator does not consider "$uciMove" a legal move');
       }
       board.makeMove(legalMove);
     }
 
+    final stopwatch = Stopwatch()..start();
     final nextMove = limits.depth == null
         ? searcher.getBestMove(board, timeLimit: limits.moveTime)
         : searcher.getBestMove(board, depth: limits.depth!);
+    stopwatch.stop();
 
     if (nextMove == null) {
       throw Exception('No valid move found');
     }
 
+    // There is no iterative deepening yet, so the whole search is reported as a single step.
+    searcher.stats
+      ..depth = limits.depth
+      ..eval = searcher.bestEval
+      ..bestMove = moveToUci(nextMove)
+      ..elapsed = stopwatch.elapsed
+      ..aborted = searcher.aborted;
+    onSearchProgressUpdate?.call(searcher.stats);
+
     return EngineMoveResult(
       uciMove: moveToUci(nextMove),
       evaluation: board.whiteToPlay ? searcher.bestEval : -searcher.bestEval,
       depth: limits.depth,
-      nodes: searcher.nodes,
+      nodes: searcher.stats.nodes,
+      stats: searcher.stats,
     );
   }
 
   @override
   PerftTestResult perft(String fen, int depth) {
-    return _perft(Board.fromFEN(fen), depth);
+    return _perft(Board.fromFEN(fen), depth, MoveGenerator());
   }
 
-  PerftTestResult _perft(Board board, int depth) {
+  // One generator is shared down the tree. Building one is expensive and each call returns a fresh move list.
+  PerftTestResult _perft(Board board, int depth, MoveGenerator moveGenerator) {
     if (depth <= 0) return PerftTestResult(1);
 
-    final moves = MoveGenerator().generateLegalMoves(board);
-    final loudMoves = MoveGenerator().generateLegalMoves(board, includeQuietMoves: false);
+    final moves = moveGenerator.generateLegalMoves(board);
+
+    // Checked at every node: the cheap check test must agree with the generator's own check flag.
+    final isInCheck = moveGenerator.isInCheck(board);
+    if (isInCheck != moveGenerator.inCheck) {
+      throw StateError(
+          'Inconsistent check status: isInCheck=$isInCheck, moveGenerator.inCheck=${moveGenerator.inCheck}');
+    }
+
+    final loudMoves = moveGenerator.generateLegalMoves(board, includeQuietMoves: false);
     if (depth == 1) return PerftTestResult(moves.length, captures: loudMoves.length);
 
     PerftTestResult result = PerftTestResult(0);
     for (final move in moves) {
       board.makeMove(move);
-      final childResult = _perft(board, depth - 1);
+      final childResult = _perft(board, depth - 1, moveGenerator);
       result.nodes += childResult.nodes;
       result.captures = (result.captures ?? 0) + (childResult.captures ?? 0);
       board.unMakeMove(move);

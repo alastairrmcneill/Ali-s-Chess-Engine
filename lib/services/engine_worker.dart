@@ -30,9 +30,10 @@ class EngineWorker {
     return worker;
   }
 
-  Future<EngineMoveResult> search(String startFen, List<String> uciMoves, Duration moveTime) {
+  /// With a [depth] the engine searches exactly that deep and [moveTime] is ignored.
+  Future<EngineMoveResult> search(String startFen, List<String> uciMoves, Duration moveTime, {int? depth}) {
     final pending = _pending = Completer<EngineMoveResult>();
-    _send.send(['search', startFen, uciMoves, moveTime.inMilliseconds]);
+    _send.send(['search', startFen, uciMoves, moveTime.inMilliseconds, depth]);
     return pending.future;
   }
 
@@ -87,7 +88,7 @@ class EngineWorker {
         final result = engine.getMove(
           command[1] as String,
           List<String>.from(command[2] as List),
-          SearchLimits(moveTime: Duration(milliseconds: command[3] as int)),
+          SearchLimits(moveTime: Duration(milliseconds: command[3] as int), depth: command[4] as int?),
           onSearchProgressUpdate: (iteration) => toMain.send(['iteration', iteration.toJson()]),
         );
         toMain.send([

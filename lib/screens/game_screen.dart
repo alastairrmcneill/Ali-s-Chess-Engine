@@ -143,7 +143,7 @@ class _GameScreenState extends State<GameScreen> {
       appBar: AppBar(
         title: Text(settings == null
             ? 'ACE'
-            : '${settings.engineName} · ${(settings.moveTime.inMilliseconds / 1000).toStringAsFixed(1)} s'),
+            : '${settings.engineName} · ${settings.depth != null ? 'depth ${settings.depth}' : '${(settings.moveTime.inMilliseconds / 1000).toStringAsFixed(1)} s'}'),
         actions: [
           IconButton(
             tooltip: 'Menu',

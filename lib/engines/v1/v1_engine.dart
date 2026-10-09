@@ -60,23 +60,26 @@ class V1Engine implements ChessEngine {
   }
 
   @override
-  int perft(String fen, int depth) {
+  PerftTestResult perft(String fen, int depth) {
     return _perft(Board.fromFEN(fen), depth);
   }
 
-  int _perft(Board board, int depth) {
-    if (depth <= 0) return 1;
+  PerftTestResult _perft(Board board, int depth) {
+    if (depth <= 0) return PerftTestResult(1);
 
     final moves = MoveGenerator().generateLegalMoves(board);
-    if (depth == 1) return moves.length;
+    final loudMoves = MoveGenerator().generateLegalMoves(board, includeQuietMoves: false);
+    if (depth == 1) return PerftTestResult(moves.length, captures: loudMoves.length);
 
-    int nodes = 0;
+    PerftTestResult result = PerftTestResult(0);
     for (final move in moves) {
       board.makeMove(move);
-      nodes += _perft(board, depth - 1);
+      final childResult = _perft(board, depth - 1);
+      result.nodes += childResult.nodes;
+      result.captures = (result.captures ?? 0) + (childResult.captures ?? 0);
       board.unMakeMove(move);
     }
-    return nodes;
+    return result;
   }
 
   String moveToUci(Move move) {

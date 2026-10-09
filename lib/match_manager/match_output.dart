@@ -40,7 +40,7 @@ class MatchOutput {
       'engine A:   ${config.engineAId}',
       'engine B:   ${config.engineBId}',
       'games:      ${config.games}',
-      'movetime:   ${config.moveTime.inMilliseconds} ms',
+      if (config.depth == null) 'movetime:   ${config.moveTime.inMilliseconds} ms' else 'depth:      ${config.depth} (fixed, untimed)',
       'max moves:  ${config.maxMoves} per side (engine moves only)',
       'openings:   $openingCount (lib/match/opening_book_data.dart)',
       'git commit: ${commit ?? 'unknown'}',

@@ -40,13 +40,18 @@ class MatchStats {
   final String engineAName, engineBName;
   final Duration moveTime;
 
+  /// Set for fixed depth matches, where there is no time limit to overrun.
+  final int? depth;
+
   /// All from engine A's point of view.
   final WinDrawLoss total = WinDrawLoss(), aAsWhite = WinDrawLoss(), aAsBlack = WinDrawLoss();
   final Map<GameTermination, int> terminations = {};
   final EngineSearchStats searchA = EngineSearchStats(), searchB = EngineSearchStats();
   Duration totalTime = Duration.zero;
 
-  MatchStats(this.engineAName, this.engineBName, this.moveTime);
+  MatchStats(this.engineAName, this.engineBName, this.moveTime, {this.depth});
+
+  String get _limitText => depth == null ? '${moveTime.inMilliseconds} ms/move' : 'depth $depth';
 
   int get gamesPlayed => total.games;
   EloResult get elo => Elo.calculate(total.wins, total.draws, total.losses);
@@ -73,7 +78,7 @@ class MatchStats {
       search.moves++;
       search.totalTimeMs += stat.timeMs;
       if (stat.timeMs > search.maxTimeMs) search.maxTimeMs = stat.timeMs;
-      if (stat.timeMs > moveTime.inMilliseconds + 50) search.overruns++;
+      if (depth == null && stat.timeMs > moveTime.inMilliseconds + 50) search.overruns++;
       if (stat.depth != null) {
         search.depthSum += stat.depth!;
         search.depthCount++;
@@ -100,7 +105,7 @@ class MatchStats {
   String toSummaryText({String? openingsDescription}) {
     final e = elo;
     final buffer = StringBuffer()
-      ..writeln('$engineAName (A) vs $engineBName (B): $gamesPlayed games, ${moveTime.inMilliseconds} ms/move'
+      ..writeln('$engineAName (A) vs $engineBName (B): $gamesPlayed games, $_limitText'
           '${openingsDescription == null ? '' : ', openings: $openingsDescription'}')
       ..writeln()
       ..writeln('Result (A\'s view):   $total    score ${_percent(total.score)}')
@@ -129,6 +134,7 @@ class MatchStats {
       'engineA': engineAName,
       'engineB': engineBName,
       'moveTimeMs': moveTime.inMilliseconds,
+      if (depth != null) 'depth': depth,
       'games': gamesPlayed,
       'total': wdl(total),
       'aAsWhite': wdl(aAsWhite),
