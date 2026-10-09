@@ -42,7 +42,7 @@ final List<PerftTestCase> _testCases = [
       PerftTestResult(2812, captures: 209),
       PerftTestResult(43238, captures: 3348),
       PerftTestResult(674624, captures: 52051),
-      // PerftTestResult(11030083, captures: 940350),
+      PerftTestResult(11030083, captures: 940350),
     ],
   ),
   PerftTestCase(
@@ -53,7 +53,7 @@ final List<PerftTestCase> _testCases = [
       PerftTestResult(264, captures: 87),
       PerftTestResult(9467, captures: 1021),
       PerftTestResult(422333, captures: 131393),
-      // PerftTestResult(15833292, captures: 2046173),
+      PerftTestResult(15833292, captures: 2046173),
     ],
   ),
   PerftTestCase(
@@ -63,8 +63,8 @@ final List<PerftTestCase> _testCases = [
       PerftTestResult(44),
       PerftTestResult(1486),
       PerftTestResult(62379),
-      // PerftTestResult(2103487),
-      // 89941194,
+      PerftTestResult(2103487),
+      PerftTestResult(89941194),
     ],
   ),
   PerftTestCase(
@@ -74,8 +74,8 @@ final List<PerftTestCase> _testCases = [
       PerftTestResult(46),
       PerftTestResult(2079),
       PerftTestResult(89890),
-      // PerftTestResult(3894594),
-      // 164075551,
+      PerftTestResult(3894594),
+      PerftTestResult(164075551),
     ],
   ),
 ];
