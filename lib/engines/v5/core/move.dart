@@ -1,4 +1,5 @@
 import 'package:ace/chess_core/notation/board_helper.dart';
+import 'package:ace/chess_core/notation/uci.dart';
 import 'package:ace/engines/v5/core/piece.dart';
 
 class Move {
@@ -17,6 +18,12 @@ class Move {
     this.promotion = 0,
     this.castling = false,
   });
+
+  String get uci => UciMove(
+        from: startingSquare,
+        to: targetSquare,
+        promotion: promotion == 0 ? null : " qnrb"[promotion],
+      ).toString();
 
   static Move get invalid {
     return Move(startingSquare: -1, targetSquare: -1);

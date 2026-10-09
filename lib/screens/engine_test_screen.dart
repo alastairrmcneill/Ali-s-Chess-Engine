@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:isolate';
 
 import 'package:ace/chess_core/notation/board_helper.dart';
@@ -50,17 +51,73 @@ Board _replay(String startFen, List<String> uciMoves) {
   return board;
 }
 
-_SearchResult _runSearch(String engineId, String startFen, List<String> uciMoves, int depth) {
-  final engine = EngineRegistry.create(engineId)..newGame();
-  final stopwatch = Stopwatch()..start();
-  final result = engine.getMove(startFen, uciMoves, SearchLimits(moveTime: const Duration(minutes: 10), depth: depth));
-  stopwatch.stop();
-  return _SearchResult(result.nodes, result.evaluation, stopwatch.elapsed, result.uciMove, result.depth, result.stats);
+/// Top level so the isolate cannot capture the widget state, which is not sendable. Streams one 'iteration'
+/// message per completed iterative deepening step, then a single 'result' (or 'error').
+void _searchEntry(List<Object?> args) {
+  final toMain = args[0] as SendPort;
+  try {
+    final engine = EngineRegistry.create(args[1] as String)..newGame();
+    final stopwatch = Stopwatch()..start();
+    final result = engine.getMove(
+      args[2] as String,
+      List<String>.from(args[3] as List),
+      SearchLimits(moveTime: const Duration(minutes: 10), depth: args[4] as int),
+      onSearchProgressUpdate: (iteration) => toMain.send(['iteration', iteration.toJson()]),
+    );
+    stopwatch.stop();
+    toMain.send([
+      'result',
+      result.nodes,
+      result.evaluation,
+      stopwatch.elapsedMicroseconds,
+      result.uciMove,
+      result.depth,
+      result.stats?.toJson(),
+    ]);
+  } catch (e) {
+    toMain.send(['error', e.toString()]);
+  }
 }
 
-/// Top level so the isolate closure cannot capture the widget state, which is not sendable.
-Future<_SearchResult> _searchInIsolate(String engineId, String startFen, List<String> uciMoves, int depth) =>
-    Isolate.run(() => _runSearch(engineId, startFen, uciMoves, depth));
+/// Runs the search in its own isolate, calling [onIteration] after every completed iterative deepening step.
+/// [onSpawn] hands back the isolate so the caller can kill it.
+Future<_SearchResult> _searchInIsolate(
+  String engineId,
+  String startFen,
+  List<String> uciMoves,
+  int depth, {
+  required void Function(SearchStats iteration) onIteration,
+  required void Function(Isolate isolate) onSpawn,
+}) async {
+  final receive = ReceivePort();
+  final completer = Completer<_SearchResult>();
+  receive.listen((dynamic message) {
+    final data = message as List<dynamic>;
+    switch (data[0] as String) {
+      case 'iteration':
+        onIteration(SearchStats.fromJson(data[1] as Map));
+      case 'result':
+        completer.complete(_SearchResult(
+          data[1] as int?,
+          data[2] as int?,
+          Duration(microseconds: data[3] as int),
+          data[4] as String,
+          data[5] as int?,
+          data[6] == null ? null : SearchStats.fromJson(data[6] as Map),
+        ));
+      case 'error':
+        completer.completeError(StateError(data[1] as String));
+    }
+  });
+  final isolate = await Isolate.spawn(_searchEntry, [receive.sendPort, engineId, startFen, uciMoves, depth]);
+  onSpawn(isolate);
+  try {
+    return await completer.future;
+  } finally {
+    receive.close();
+    isolate.kill();
+  }
+}
 
 String? _fenProblem(String fen) {
   final parts = fen.split(' ');
@@ -104,6 +161,7 @@ class _EngineTestScreenState extends State<EngineTestScreen> {
   int? _selected;
   String? _error;
   _SearchResult? _result;
+  Isolate? _searchIsolate;
 
   /// Bumped whenever the position is replaced, so a search that finishes late is dropped.
   int _generation = 0;
@@ -116,6 +174,7 @@ class _EngineTestScreenState extends State<EngineTestScreen> {
 
   @override
   void dispose() {
+    _searchIsolate?.kill();
     _fenController.dispose();
     super.dispose();
   }
@@ -198,13 +257,35 @@ class _EngineTestScreenState extends State<EngineTestScreen> {
     final startFen = _rootFen;
     final moves = List.of(_playedUci);
     final depth = _depth;
+    final whiteToPlay = _whiteToPlay;
     setState(() {
       _thinking = true;
       _selected = null;
       _error = null;
+      _result = null;
     });
     try {
-      final result = await _searchInIsolate(widget.engineId, startFen, moves, depth);
+      final result = await _searchInIsolate(
+        widget.engineId,
+        startFen,
+        moves,
+        depth,
+        onSpawn: (isolate) => _searchIsolate = isolate,
+        onIteration: (iteration) {
+          if (!mounted || generation != _generation) return;
+          final eval = iteration.eval;
+          setState(() {
+            _result = _SearchResult(
+              iteration.nodes,
+              eval == null ? null : (whiteToPlay ? eval : -eval),
+              iteration.elapsed,
+              iteration.bestMove ?? '-',
+              iteration.depth,
+              iteration,
+            );
+          });
+        },
+      );
       if (!mounted || generation != _generation) return;
       final move = _legalMoves.where((m) => _uci(m) == result.bestMove).firstOrNull;
       _result = result;

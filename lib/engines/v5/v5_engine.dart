@@ -1,4 +1,3 @@
-import 'package:ace/chess_core/notation/uci.dart';
 import 'package:ace/engines/engine_interface.dart';
 import 'package:ace/engines/v5/core/move.dart';
 import 'package:ace/engines/v5/core/board.dart';
@@ -13,7 +12,7 @@ class V5Engine implements ChessEngine {
   String get id => 'v5';
 
   @override
-  String get displayName => 'V5 - Quiescence';
+  String get displayName => 'V5 - Iterative Deepening';
 
   @override
   void newGame() {
@@ -48,28 +47,20 @@ class V5Engine implements ChessEngine {
 
     final stopwatch = Stopwatch()..start();
     final nextMove = limits.depth == null
-        ? searcher.getBestMove(board, timeLimit: limits.moveTime)
-        : searcher.getBestMove(board, depth: limits.depth!);
+        ? searcher.getBestMove(board, timeLimit: limits.moveTime, onSearchProgressUpdate: onSearchProgressUpdate)
+        : searcher.getBestMove(board, depth: limits.depth!, onSearchProgressUpdate: onSearchProgressUpdate);
     stopwatch.stop();
 
     if (nextMove == null) {
       throw Exception('No valid move found');
     }
 
-    // There is no iterative deepening yet, so the whole search is reported as a single step.
-    searcher.stats
-      ..depth = limits.depth
-      ..eval = searcher.bestEval
-      ..bestMove = moveToUci(nextMove)
-      ..elapsed = stopwatch.elapsed
-      ..aborted = searcher.aborted;
-    onSearchProgressUpdate?.call(searcher.stats);
-
     return EngineMoveResult(
       uciMove: moveToUci(nextMove),
       evaluation: board.whiteToPlay ? searcher.bestEval : -searcher.bestEval,
-      depth: limits.depth,
+      depth: searcher.stats.depth,
       nodes: searcher.stats.nodes,
+      principalVariation: searcher.stats.pv,
       stats: searcher.stats,
     );
   }
@@ -106,11 +97,5 @@ class V5Engine implements ChessEngine {
     return result;
   }
 
-  String moveToUci(Move move) {
-    return UciMove(
-            from: move.startingSquare,
-            to: move.targetSquare,
-            promotion: move.promotion == 0 ? null : " qnrb"[move.promotion])
-        .toString();
-  }
+  String moveToUci(Move move) => move.uci;
 }

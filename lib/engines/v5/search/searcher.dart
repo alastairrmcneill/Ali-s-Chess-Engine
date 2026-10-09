@@ -12,9 +12,6 @@ class Searcher {
   final Evaluator evaluator = Evaluator();
   final int mateScore = -999999999;
 
-  /// Quiescence nodes in check are only searched with every evasion while the capture chain is shorter than
-  /// this. Deeper in, mate is still detected but the node then falls back to stand pat and captures, so long
-  /// check sequences cannot blow the tree up. Set very high to always search every evasion.
   int qCheckDepthLimit = 1;
 
   int bestEval = -999999999;
@@ -25,14 +22,13 @@ class Searcher {
   final Stopwatch _stopwatch = Stopwatch();
   Duration? _timeLimit;
 
-  /// Fixed depth negamax. With [timeLimit] the search stops once time is up and returns the best
-  /// move among the root moves that were fully searched.
-  Move? getBestMove(Board board, {int depth = 4, Duration? timeLimit}) {
+  Move? getBestMove(
+    Board board, {
+    int? depth,
+    Duration? timeLimit,
+    SearchProgressCallback? onSearchProgressUpdate,
+  }) {
     this.board = board;
-    int alpha = -1000000000;
-    int beta = 1000000000;
-    bestEval = -999999999;
-    bestMove = null;
     stats = SearchStats();
     aborted = false;
     _timeLimit = timeLimit;
@@ -40,25 +36,61 @@ class Searcher {
       ..reset()
       ..start();
 
+    int maxDepth = depth ?? 256;
+    bestEval = -999999999;
+    bestMove = null;
+
     final legalMoves = moveGenerator.generateLegalMoves(board);
-    final orderedMoves = moveOrdering.orderMoves(board, legalMoves);
+    List<Move> orderedMoves = moveOrdering.orderMoves(board, legalMoves);
 
-    for (final move in orderedMoves) {
-      board.makeMove(move);
-      final eval = -search(depth - 1, 1, -beta, -alpha);
-      board.unMakeMove(move);
+    for (int iterationDepth = 1; iterationDepth <= maxDepth; iterationDepth++) {
+      int alpha = -1000000000;
+      int beta = 1000000000;
+      int iterationEval = -1000000000;
+      Move? iterationBestMove;
 
-      // A move cut short by the clock has an unreliable score, so it never counts.
-      if (aborted && bestMove != null) break;
+      for (final move in orderedMoves) {
+        board.makeMove(move);
+        final eval = -search(iterationDepth - 1, 1, -beta, -alpha);
+        board.unMakeMove(move);
 
-      if (eval > bestEval) {
-        bestEval = eval;
-        bestMove = move;
-        alpha = bestEval;
+        if (aborted) break;
+
+        if (eval > iterationEval) {
+          iterationEval = eval;
+          iterationBestMove = move;
+          alpha = iterationEval;
+        }
       }
+
+      if (iterationBestMove != null) {
+        bestMove = iterationBestMove;
+        bestEval = iterationEval;
+        if (!aborted) {
+          stats.depth = iterationDepth;
+          orderedMoves = [iterationBestMove, ...orderedMoves.where((m) => m != iterationBestMove)];
+        }
+      }
+
+      _fillStats();
+      if (!aborted) onSearchProgressUpdate?.call(stats);
+
+      if (aborted) break;
+      if (bestEval.abs() > (mateScore.abs() - 1000)) break;
     }
 
+    bestMove ??= orderedMoves.isNotEmpty ? orderedMoves[0] : null;
+    _fillStats();
     return bestMove;
+  }
+
+  void _fillStats() {
+    stats
+      ..eval = bestEval
+      ..bestMove = bestMove?.uci ?? ''
+      ..pv = bestMove == null ? const [] : [bestMove!.uci]
+      ..elapsed = _stopwatch.elapsed
+      ..aborted = aborted;
   }
 
   int search(int depth, int plyFromRoot, int alpha, int beta) {
