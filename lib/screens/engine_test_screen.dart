@@ -21,8 +21,9 @@ class _SearchResult {
   final Duration elapsed;
   final String bestMove;
   final int? depth;
+  final SearchStats? stats;
 
-  const _SearchResult(this.nodes, this.eval, this.elapsed, this.bestMove, this.depth);
+  const _SearchResult(this.nodes, this.eval, this.elapsed, this.bestMove, this.depth, this.stats);
 }
 
 bool _zobristReady = false;
@@ -54,7 +55,7 @@ _SearchResult _runSearch(String engineId, String startFen, List<String> uciMoves
   final stopwatch = Stopwatch()..start();
   final result = engine.getMove(startFen, uciMoves, SearchLimits(moveTime: const Duration(minutes: 10), depth: depth));
   stopwatch.stop();
-  return _SearchResult(result.nodes, result.evaluation, stopwatch.elapsed, result.uciMove, result.depth);
+  return _SearchResult(result.nodes, result.evaluation, stopwatch.elapsed, result.uciMove, result.depth, result.stats);
 }
 
 /// Top level so the isolate closure cannot capture the widget state, which is not sendable.
@@ -405,6 +406,39 @@ class _EngineTestScreenState extends State<EngineTestScreen> {
                       ),
                     ),
                   ),
+                  if (result?.stats case final stats?) ...[
+                    const SizedBox(height: 16),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  _row(theme, 'Q nodes', '${stats.qNodes}'),
+                                  _row(theme, 'Evals', '${stats.evaluations}'),
+                                  _row(theme, 'Max Q depth', '${stats.maxQDepth}'),
+                                  _row(theme, 'Q check nodes', '${stats.qCheckNodes}'),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 24),
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  _row(theme, 'Beta cutoffs', '${stats.betaCutoffs}'),
+                                  _row(theme, 'Q cutoffs', '${stats.qBetaCutoffs}'),
+                                  _row(theme, '1st move', _firstMovePercent(stats)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   Card(
                     child: Padding(
@@ -510,6 +544,9 @@ class _EngineTestScreenState extends State<EngineTestScreen> {
     final nodes = r.nodes;
     return seconds == 0 || nodes == null ? '-' : (nodes / seconds).round().toString();
   }
+
+  String _firstMovePercent(SearchStats s) =>
+      s.betaCutoffs == 0 ? '-' : '${(100 * s.firstMoveCutoffs / s.betaCutoffs).toStringAsFixed(1)}%';
 
   Widget _row(ThemeData theme, String label, String value) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),

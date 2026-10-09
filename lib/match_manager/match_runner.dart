@@ -29,9 +29,11 @@ class MatchRunner {
       engineAName,
       engineBName,
       config.moveTime,
+      depth: config.depth,
     );
     final limits = SearchLimits(
       moveTime: config.moveTime,
+      depth: config.depth,
     );
 
     final book = OpeningBook.standard();

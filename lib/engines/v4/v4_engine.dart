@@ -58,28 +58,41 @@ class V4Engine implements ChessEngine {
       uciMove: moveToUci(nextMove),
       evaluation: board.whiteToPlay ? searcher.bestEval : -searcher.bestEval,
       depth: limits.depth,
-      nodes: searcher.nodes,
+      nodes: searcher.stats.nodes,
+      stats: searcher.stats,
     );
   }
 
   @override
-  int perft(String fen, int depth) {
-    return _perft(Board.fromFEN(fen), depth);
+  PerftTestResult perft(String fen, int depth) {
+    return _perft(Board.fromFEN(fen), depth, MoveGenerator());
   }
 
-  int _perft(Board board, int depth) {
-    if (depth <= 0) return 1;
+  // One generator is shared down the tree. Building one is expensive and each call returns a fresh move list.
+  PerftTestResult _perft(Board board, int depth, MoveGenerator moveGenerator) {
+    if (depth <= 0) return PerftTestResult(1);
 
-    final moves = MoveGenerator().generateLegalMoves(board);
-    if (depth == 1) return moves.length;
+    final moves = moveGenerator.generateLegalMoves(board);
 
-    int nodes = 0;
+    // Checked at every node: the cheap check test must agree with the generator's own check flag.
+    final isInCheck = moveGenerator.isInCheck(board);
+    if (isInCheck != moveGenerator.inCheck) {
+      throw StateError(
+          'Inconsistent check status: isInCheck=$isInCheck, moveGenerator.inCheck=${moveGenerator.inCheck}');
+    }
+
+    final loudMoves = moveGenerator.generateLegalMoves(board, includeQuietMoves: false);
+    if (depth == 1) return PerftTestResult(moves.length, captures: loudMoves.length);
+
+    PerftTestResult result = PerftTestResult(0);
     for (final move in moves) {
       board.makeMove(move);
-      nodes += _perft(board, depth - 1);
+      final childResult = _perft(board, depth - 1, moveGenerator);
+      result.nodes += childResult.nodes;
+      result.captures = (result.captures ?? 0) + (childResult.captures ?? 0);
       board.unMakeMove(move);
     }
-    return nodes;
+    return result;
   }
 
   String moveToUci(Move move) {

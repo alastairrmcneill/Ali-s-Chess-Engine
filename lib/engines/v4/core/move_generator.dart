@@ -87,6 +87,49 @@ class MoveGenerator {
     return moves;
   }
 
+  bool isInCheck(Board board) {
+    final friendly = board.whiteToPlay ? Piece.white : Piece.black;
+    final opponent = board.whiteToPlay ? Piece.black : Piece.white;
+    final king =
+        board.position.indexWhere((piece) => Piece.type(piece) == Piece.king && Piece.isColor(piece, friendly));
+
+    // Knights
+    for (final square in precomputeData.knightMoves[king]) {
+      final piece = board.position[square];
+      if (Piece.type(piece) == Piece.knight && Piece.isColor(piece, opponent)) {
+        return true;
+      }
+    }
+
+    // Pawn
+    final pawnMoves = board.whiteToPlay ? precomputeData.whitePawnCaptures : precomputeData.blackPawnCaptures;
+    for (final square in pawnMoves[king]) {
+      final piece = board.position[square];
+      if (Piece.type(piece) == Piece.pawn && Piece.isColor(piece, opponent)) {
+        return true;
+      }
+    }
+
+    // Sliders
+    for (int dir = 0; dir < 8; dir++) {
+      final isDiagonal = dir >= 4;
+      final offset = precomputeData.directionOffsets[dir];
+
+      for (int n = 1; n <= precomputeData.numSquaresToEdge[king][dir]; n++) {
+        final piece = board.position[king + n * offset];
+        if (piece == Piece.none) continue;
+        if (Piece.isColor(piece, opponent) &&
+            (isDiagonal
+                ? Piece.type(piece) == Piece.bishop || Piece.type(piece) == Piece.queen
+                : Piece.type(piece) == Piece.rook || Piece.type(piece) == Piece.queen)) {
+          return true;
+        }
+        break; // Stop looking in this direction after hitting any piece
+      }
+    }
+    return false;
+  }
+
   void findPieces() {
     for (var index = 0; index < board.position.length; index++) {
       int piece = board.position[index];

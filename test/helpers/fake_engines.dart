@@ -31,7 +31,7 @@ class ScriptedEngine implements ChessEngine {
   }
 
   @override
-  int perft(String fen, int depth) => 0;
+  PerftTestResult perft(String fen, int depth) => PerftTestResult(0);
 }
 
 /// Always returns a move that is never legal (a piece can't move to its own square).
@@ -55,7 +55,7 @@ class IllegalEngine implements ChessEngine {
       EngineMoveResult(uciMove: 'a1a1');
 
   @override
-  int perft(String fen, int depth) => 0;
+  PerftTestResult perft(String fen, int depth) => PerftTestResult(0);
 }
 
 /// Always throws, simulating an engine crash.
@@ -80,7 +80,7 @@ class CrashingEngine implements ChessEngine {
   }
 
   @override
-  int perft(String fen, int depth) => 0;
+  PerftTestResult perft(String fen, int depth) => PerftTestResult(0);
 }
 
 /// Returns text that doesn't look like a UCI move at all.
@@ -104,7 +104,7 @@ class MalformedEngine implements ChessEngine {
       EngineMoveResult(uciMove: 'xyz');
 
   @override
-  int perft(String fen, int depth) => 0;
+  PerftTestResult perft(String fen, int depth) => PerftTestResult(0);
 }
 
 /// Returns an empty move string.
@@ -128,7 +128,7 @@ class NoMoveEngine implements ChessEngine {
       EngineMoveResult(uciMove: '');
 
   @override
-  int perft(String fen, int depth) => 0;
+  PerftTestResult perft(String fen, int depth) => PerftTestResult(0);
 }
 
 /// Wraps another engine and counts how many times each method is called.
@@ -163,5 +163,5 @@ class CountingEngine implements ChessEngine {
   }
 
   @override
-  int perft(String fen, int depth) => inner.perft(fen, depth);
+  PerftTestResult perft(String fen, int depth) => inner.perft(fen, depth);
 }
