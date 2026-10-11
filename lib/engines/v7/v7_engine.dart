@@ -7,7 +7,10 @@ import 'package:ace/engines/v7/search/opening_book.dart';
 import 'package:ace/engines/v7/search/searcher.dart';
 
 class V7Engine implements ChessEngine {
-  late Searcher searcher;
+  Searcher? _searcher;
+
+  // Created on first use so getMove works without a prior newGame().
+  Searcher get searcher => _searcher ??= Searcher();
 
   @override
   String get id => 'v7';
@@ -18,7 +21,7 @@ class V7Engine implements ChessEngine {
   @override
   void newGame() {
     Zobrist.ensureInitialised();
-    searcher = Searcher();
+    _searcher = Searcher();
   }
 
   @override
@@ -46,7 +49,7 @@ class V7Engine implements ChessEngine {
       board.makeMove(legalMove);
     }
 
-    if (uciMoves.length < 6) {
+    if (uciMoves.length < 6 && startingFen == "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") {
       final openingBookMove = OpeningBook().pickMove(uciMoves);
       if (openingBookMove != null) {
         return EngineMoveResult(
