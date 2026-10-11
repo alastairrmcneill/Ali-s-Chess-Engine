@@ -3,6 +3,7 @@ import 'package:ace/engines/v7/core/move.dart';
 import 'package:ace/engines/v7/core/board.dart';
 import 'package:ace/engines/v7/core/move_generator.dart';
 import 'package:ace/engines/v7/core/zobrist.dart';
+import 'package:ace/engines/v7/search/opening_book.dart';
 import 'package:ace/engines/v7/search/searcher.dart';
 
 class V7Engine implements ChessEngine {
@@ -12,7 +13,7 @@ class V7Engine implements ChessEngine {
   String get id => 'v7';
 
   @override
-  String get displayName => 'V7 - Better Evaluation';
+  String get displayName => 'V7 - Book openings';
 
   @override
   void newGame() {
@@ -43,6 +44,20 @@ class V7Engine implements ChessEngine {
         throw StateError('v7 move generator does not consider "$uciMove" a legal move');
       }
       board.makeMove(legalMove);
+    }
+
+    if (uciMoves.length < 6) {
+      final openingBookMove = OpeningBook().pickMove(uciMoves);
+      if (openingBookMove != null) {
+        return EngineMoveResult(
+          uciMove: openingBookMove,
+          evaluation: 0,
+          depth: 0,
+          nodes: 0,
+          principalVariation: [],
+          stats: searcher.stats,
+        );
+      }
     }
 
     final stopwatch = Stopwatch()..start();
