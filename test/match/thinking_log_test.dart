@@ -11,12 +11,12 @@ import 'package:ace/match/thinking_log.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('v2 games produce valid JSONL with move, pv, depth and nodes', () async {
+  test('v5 games produce valid JSONL with move, pv, depth and nodes', () async {
     final record = await GameRunner().playGame(
       gameNumber: 7,
       opening: const Opening(0, ['e2e4', 'e7e5']),
-      white: EngineRegistry.create('v2'),
-      black: EngineRegistry.create('v1'),
+      white: EngineRegistry.create('v5'),
+      black: EngineRegistry.create('v6'),
       engineAIsWhite: true,
       searchLimits: SearchLimits(moveTime: const Duration(milliseconds: 40)),
       maxPlies: 3,

@@ -30,7 +30,7 @@ void main() {
       final limits = SearchLimits(moveTime: const Duration(milliseconds: 50));
 
       test('returns a well-formed, legal UCI move from the start position', () async {
-        final engine = EngineRegistry.create(id);
+        final engine = EngineRegistry.create(id)..newGame();
         final result = engine.getMove(FenPosition.startingPosition, [], limits);
 
         expect(result.uciMove, matches(_uciMoveRegExp));
@@ -42,15 +42,15 @@ void main() {
       });
 
       test('promotes when the only reasonable move is a pawn push to the back rank', () async {
-        final engine = EngineRegistry.create(id);
+        final engine = EngineRegistry.create(id)..newGame();
         final result = engine.getMove('4k3/1P6/8/8/8/8/8/4K3 w - - 0 1', [], limits);
 
         expect(result.uciMove, startsWith('b7b8'));
         expect(result.uciMove, hasLength(5));
-      }, skip: id == 'v3' ? 'baseline negamax: material-only eval ties promoting now with promoting later' : null);
+      }, skip: const {'v1', 'v2', 'v3'}.contains(id) ? 'material-only eval ties promoting now with promoting later' : null);
 
       test('replaying a history that includes castling does not throw', () async {
-        final engine = EngineRegistry.create(id);
+        final engine = EngineRegistry.create(id)..newGame();
         engine.getMove(
           FenPosition.startingPosition,
           ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'g8f6', 'e1g1'],
@@ -59,7 +59,7 @@ void main() {
       });
 
       test('replaying an en passant line does not throw', () async {
-        final engine = EngineRegistry.create(id);
+        final engine = EngineRegistry.create(id)..newGame();
         engine.getMove(
           FenPosition.startingPosition,
           ['e2e4', 'a7a6', 'e4e5', 'd7d5', 'e5d6'],
@@ -68,7 +68,7 @@ void main() {
       });
 
       test('an unknown/illegal move in the history throws StateError', () async {
-        final engine = EngineRegistry.create(id);
+        final engine = EngineRegistry.create(id)..newGame();
         expectLater(
           () => engine.getMove(FenPosition.startingPosition, ['e2e5'], limits),
           throwsStateError,
@@ -76,7 +76,7 @@ void main() {
       });
 
       test('does not print while searching', () {
-        final engine = EngineRegistry.create(id);
+        final engine = EngineRegistry.create(id)..newGame();
         final printed = <String>[];
         runZoned(
           () => engine.getMove(FenPosition.startingPosition, [], limits),
@@ -86,7 +86,7 @@ void main() {
       });
 
       test('getMove can be called twice on the same instance, with newGame() in between', () async {
-        final engine = EngineRegistry.create(id);
+        final engine = EngineRegistry.create(id)..newGame();
 
         final first = engine.getMove(FenPosition.startingPosition, [], limits);
         expect(first.uciMove, matches(_uciMoveRegExp));

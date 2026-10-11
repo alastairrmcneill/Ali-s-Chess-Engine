@@ -5,8 +5,8 @@ import 'package:ace/services/engine_worker.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('worker streams one event per iterative deepening step from v2 and returns a move', () async {
-    final worker = await EngineWorker.spawn('v2');
+  test('worker streams one event per iterative deepening step from v5 and returns a move', () async {
+    final worker = await EngineWorker.spawn('v5');
     final stats = <SearchStats>[];
     final sub = worker.stats.listen(stats.add);
 
@@ -38,7 +38,7 @@ void main() {
   test('provider: human plays, engine replies, restart resets', () async {
     final game = GameProvider();
     await game.startGame(
-      const GameSettings(engineId: 'v1', moveTime: Duration(milliseconds: 100), playerIsWhite: true),
+      const GameSettings(engineId: 'v5', moveTime: Duration(milliseconds: 100), playerIsWhite: true),
     );
     expect(game.isHumanTurn, isTrue);
 
@@ -61,7 +61,7 @@ void main() {
   test('provider: engine moves first when player is black', () async {
     final game = GameProvider();
     await game.startGame(
-      const GameSettings(engineId: 'v2', moveTime: Duration(milliseconds: 100), playerIsWhite: false),
+      const GameSettings(engineId: 'v5', moveTime: Duration(milliseconds: 100), playerIsWhite: false),
     );
     expect(game.engineThinking, isTrue);
     while (game.engineThinking) {
