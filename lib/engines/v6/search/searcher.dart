@@ -12,6 +12,8 @@ class Searcher {
   final Evaluator evaluator = Evaluator();
   final int mateScore = -999999999;
 
+  static const int drawScore = 40;
+
   int qCheckDepthLimit = 1;
 
   int bestEval = -999999999;
@@ -101,7 +103,7 @@ class Searcher {
     if (aborted) return 0;
 
     if (plyFromRoot > 0 && (board.hashHistory[board.zobristKey] ?? 0) >= 2) {
-      return 0;
+      return drawScore; // Threefold repetition
     }
 
     if (depth == 0) {
@@ -118,7 +120,7 @@ class Searcher {
     }
 
     // Checked after mate/stalemate, since a mate on the 100th half move still wins.
-    if (board.fiftyMoveRule >= 100) return 0;
+    if (board.fiftyMoveRule >= 100) return drawScore; // Fifty-move rule draw
 
     for (int i = 0; i < orderedMoves.length; i++) {
       board.makeMove(orderedMoves[i]);

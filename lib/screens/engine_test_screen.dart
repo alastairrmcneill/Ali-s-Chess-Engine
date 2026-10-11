@@ -61,7 +61,7 @@ void _searchEntry(List<Object?> args) {
     final result = engine.getMove(
       args[2] as String,
       List<String>.from(args[3] as List),
-      SearchLimits(moveTime: const Duration(minutes: 10), depth: args[4] as int),
+      SearchLimits(moveTime: Duration(milliseconds: args[5] as int), depth: args[4] as int?),
       onSearchProgressUpdate: (iteration) => toMain.send(['iteration', iteration.toJson()]),
     );
     stopwatch.stop();
@@ -85,7 +85,8 @@ Future<_SearchResult> _searchInIsolate(
   String engineId,
   String startFen,
   List<String> uciMoves,
-  int depth, {
+  int? depth,
+  Duration moveTime, {
   required void Function(SearchStats iteration) onIteration,
   required void Function(Isolate isolate) onSpawn,
 }) async {
@@ -109,7 +110,7 @@ Future<_SearchResult> _searchInIsolate(
         completer.completeError(StateError(data[1] as String));
     }
   });
-  final isolate = await Isolate.spawn(_searchEntry, [receive.sendPort, engineId, startFen, uciMoves, depth]);
+  final isolate = await Isolate.spawn(_searchEntry, [receive.sendPort, engineId, startFen, uciMoves, depth, moveTime.inMilliseconds]);
   onSpawn(isolate);
   try {
     return await completer.future;
@@ -154,6 +155,8 @@ class _EngineTestScreenState extends State<EngineTestScreen> {
   final List<String> _playedUci = [];
 
   int _depth = 3;
+  bool _timed = false;
+  double _seconds = 5;
   bool _playerIsWhite = true;
   bool _autoReply = true;
   bool _flipped = false;
@@ -256,7 +259,8 @@ class _EngineTestScreenState extends State<EngineTestScreen> {
     final generation = ++_generation;
     final startFen = _rootFen;
     final moves = List.of(_playedUci);
-    final depth = _depth;
+    final depth = _timed ? null : _depth;
+    final moveTime = _timed ? Duration(milliseconds: (_seconds * 1000).round()) : const Duration(minutes: 10);
     final whiteToPlay = _whiteToPlay;
     setState(() {
       _thinking = true;
@@ -270,6 +274,7 @@ class _EngineTestScreenState extends State<EngineTestScreen> {
         startFen,
         moves,
         depth,
+        moveTime,
         onSpawn: (isolate) => _searchIsolate = isolate,
         onIteration: (iteration) {
           if (!mounted || generation != _generation) return;
@@ -527,19 +532,38 @@ class _EngineTestScreenState extends State<EngineTestScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          SegmentedButton<bool>(
+                            showSelectedIcon: false,
+                            segments: const [
+                              ButtonSegment(value: false, label: Text('Fixed depth')),
+                              ButtonSegment(value: true, label: Text('Timed')),
+                            ],
+                            selected: {_timed},
+                            onSelectionChanged: (s) => setState(() => _timed = s.first),
+                          ),
+                          const SizedBox(height: 12),
                           Row(
                             children: [
-                              Expanded(child: Text('Depth', style: theme.textTheme.labelLarge)),
-                              Text('$_depth', style: theme.textTheme.titleSmall),
+                              Expanded(child: Text(_timed ? 'Time per move' : 'Depth', style: theme.textTheme.labelLarge)),
+                              Text(_timed ? '${_seconds.toStringAsFixed(1)} s' : '$_depth', style: theme.textTheme.titleSmall),
                             ],
                           ),
-                          Slider(
-                            value: _depth.toDouble(),
-                            min: 1,
-                            max: 8,
-                            divisions: 7,
-                            onChanged: (v) => setState(() => _depth = v.round()),
-                          ),
+                          if (_timed)
+                            Slider(
+                              value: _seconds,
+                              min: 0.5,
+                              max: 30,
+                              divisions: 59,
+                              onChanged: (v) => setState(() => _seconds = v),
+                            )
+                          else
+                            Slider(
+                              value: _depth.toDouble(),
+                              min: 1,
+                              max: 8,
+                              divisions: 7,
+                              onChanged: (v) => setState(() => _depth = v.round()),
+                            ),
                           SegmentedButton<bool>(
                             showSelectedIcon: false,
                             segments: const [
