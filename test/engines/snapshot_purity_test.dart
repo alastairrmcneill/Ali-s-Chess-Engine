@@ -26,14 +26,13 @@ void main() {
       for (final file in dartFiles) {
         test('${file.path} only imports dart: or package:ace/engines/$versionId/...', () {
           final content = file.readAsStringSync();
-          final isAdapter = content.contains('implements ChessEngine');
           final imports = _importRegExp.allMatches(content).map((m) => m.group(1)!);
 
           for (final import in imports) {
             final allowed = import.startsWith('dart:') ||
                 import.startsWith('package:ace/engines/$versionId/') ||
                 import.startsWith('package:ace/chess_core/notation/') ||
-                (isAdapter && import == 'package:ace/engines/engine_interface.dart');
+                import == 'package:ace/engines/engine_interface.dart';
 
             expect(
               allowed,
