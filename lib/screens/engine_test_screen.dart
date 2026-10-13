@@ -10,6 +10,7 @@ import 'package:ace/chess_core/notation/piece.dart';
 import 'package:ace/chess_core/rules/zobrist.dart';
 import 'package:ace/components/piece_image.dart';
 import 'package:ace/components/square.dart';
+import 'package:ace/components/stats_panel.dart';
 import 'package:ace/engines/engine_interface.dart';
 import 'package:ace/engines/engine_registry.dart';
 import 'package:flutter/material.dart';
@@ -164,6 +165,9 @@ class _EngineTestScreenState extends State<EngineTestScreen> {
   int? _selected;
   String? _error;
   _SearchResult? _result;
+  final List<SearchStats> _iterations = [];
+  bool _searched = false;
+  bool _engineBlack = false;
   Isolate? _searchIsolate;
 
   /// Bumped whenever the position is replaced, so a search that finishes late is dropped.
@@ -217,6 +221,8 @@ class _EngineTestScreenState extends State<EngineTestScreen> {
     _selected = null;
     _thinking = false;
     _result = null;
+    _iterations.clear();
+    _searched = false;
     _error = null;
     _refreshLegal();
     if (notify) {
@@ -267,6 +273,8 @@ class _EngineTestScreenState extends State<EngineTestScreen> {
       _selected = null;
       _error = null;
       _result = null;
+      _iterations.clear();
+      _engineBlack = !whiteToPlay;
     });
     try {
       final result = await _searchInIsolate(
@@ -280,6 +288,7 @@ class _EngineTestScreenState extends State<EngineTestScreen> {
           if (!mounted || generation != _generation) return;
           final eval = iteration.eval;
           setState(() {
+            _iterations.add(iteration);
             _result = _SearchResult(
               iteration.nodes,
               eval == null ? null : (whiteToPlay ? eval : -eval),
@@ -294,6 +303,7 @@ class _EngineTestScreenState extends State<EngineTestScreen> {
       if (!mounted || generation != _generation) return;
       final move = _legalMoves.where((m) => _uci(m) == result.bestMove).firstOrNull;
       _result = result;
+      _searched = true;
       _thinking = false;
       if (move == null) {
         setState(() => _error = 'Engine returned no legal move');
@@ -463,34 +473,13 @@ class _EngineTestScreenState extends State<EngineTestScreen> {
                   ),
                   if (_error != null) Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
                   const SizedBox(height: 12),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              children: [
-                                _row(theme, 'Depth', result == null ? '-' : '${result.depth ?? '-'}'),
-                                _row(theme, 'Time', result == null ? '-' : '${result.elapsed.inMilliseconds} ms'),
-                                _row(theme, 'Nodes', result == null ? '-' : '${result.nodes ?? '-'}'),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: Column(
-                              children: [
-                                _row(theme, 'Nodes/s', result == null ? '-' : _nps(result)),
-                                _row(theme, 'Best move', result?.bestMove ?? '-'),
-                                _row(theme, 'Eval', result == null ? '-' : '${result.eval ?? '-'}'),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  StatsPanel(
+                    stats: result?.stats,
+                    iterations: _iterations,
+                    thinking: _thinking,
+                    searched: _searched,
+                    evalForWhite: result?.eval,
+                    engineIsBlack: _engineBlack,
                   ),
                   if (result?.stats case final stats?) ...[
                     const SizedBox(height: 16),
@@ -503,9 +492,6 @@ class _EngineTestScreenState extends State<EngineTestScreen> {
                             Expanded(
                               child: Column(
                                 children: [
-                                  _row(theme, 'Q nodes', '${stats.qNodes}'),
-                                  _row(theme, 'Evals', '${stats.evaluations}'),
-                                  _row(theme, 'Max Q depth', '${stats.maxQDepth}'),
                                   _row(theme, 'Q check nodes', '${stats.qCheckNodes}'),
                                 ],
                               ),
@@ -642,12 +628,6 @@ class _EngineTestScreenState extends State<EngineTestScreen> {
         ),
       ),
     );
-  }
-
-  String _nps(_SearchResult r) {
-    final seconds = r.elapsed.inMicroseconds / 1e6;
-    final nodes = r.nodes;
-    return seconds == 0 || nodes == null ? '-' : (nodes / seconds).round().toString();
   }
 
   String _firstMovePercent(SearchStats s) =>

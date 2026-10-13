@@ -179,7 +179,7 @@ class _GameScreenState extends State<GameScreen> {
                     ),
                     const SizedBox(width: 24),
                     const Expanded(
-                        child: SingleChildScrollView(child: StatsPanel())),
+                        child: SingleChildScrollView(child: _GameStatsPanel())),
                   ],
                 ),
               );
@@ -194,13 +194,30 @@ class _GameScreenState extends State<GameScreen> {
                   const SizedBox(height: 12),
                   const BoardView(),
                   const SizedBox(height: 16),
-                  const StatsPanel(),
+                  const _GameStatsPanel(),
                 ],
               ),
             );
           },
         ),
       ),
+    );
+  }
+}
+
+class _GameStatsPanel extends StatelessWidget {
+  const _GameStatsPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    final game = context.watch<GameProvider>();
+    return StatsPanel(
+      stats: game.stats,
+      iterations: game.iterations,
+      thinking: game.engineThinking,
+      searched: game.searchesCompleted > 0,
+      evalForWhite: game.evalForWhite,
+      engineIsBlack: game.playerIsWhite,
     );
   }
 }
