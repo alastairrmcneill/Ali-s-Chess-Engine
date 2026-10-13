@@ -4,11 +4,13 @@ import 'package:ace/engines/v8/core/move.dart';
 import 'package:ace/engines/v8/core/move_generator.dart';
 import 'package:ace/engines/v8/search/evaluator.dart';
 import 'package:ace/engines/v8/search/move_ordering.dart';
+import 'package:ace/engines/v8/search/transposition_table.dart';
 
 class Searcher {
   late Board board;
   final MoveGenerator moveGenerator = MoveGenerator();
   final MoveOrdering moveOrdering = MoveOrdering();
+  final TranspositionTable tt = TranspositionTable();
   final Evaluator evaluator = Evaluator();
   final int mateScore = -999999999;
 
@@ -111,8 +113,34 @@ class Searcher {
       return eval;
     }
 
+    // Probe the transposition table
+    final originalAlpha = alpha;
+    int ttMove = 0;
+    final slot = tt.probe(board.zobristKey);
+
+    if (slot != null) {
+      ttMove = tt.moveAt(slot);
+      if (tt.depthAt(slot) >= depth) {
+        // Use the transposition table entry
+
+        final score = fromTT(tt.scoreAt(slot), plyFromRoot);
+        final flag = tt.flagAt(slot);
+        if (flag == TranspositionTable.exact) {
+          stats.transpositions++;
+          return score;
+        }
+        if (flag == TranspositionTable.lower && score >= beta) {
+          stats.transpositions++;
+          return beta;
+        }
+        if (flag == TranspositionTable.upper && score <= alpha) {
+          stats.transpositions++;
+          return alpha;
+        }
+      }
+    }
+
     final legalMoves = moveGenerator.generateLegalMoves(board);
-    final orderedMoves = moveOrdering.orderMoves(board, legalMoves);
 
     if (legalMoves.isEmpty) {
       // either return checkmate or stalemate
@@ -122,6 +150,8 @@ class Searcher {
     // Checked after mate/stalemate, since a mate on the 100th half move still wins.
     if (board.fiftyMoveRule >= 100) return drawScore; // Fifty-move rule draw
 
+    final orderedMoves = moveOrdering.orderMoves(board, legalMoves, ttMove: ttMove);
+    Move? bestMoveHere;
     for (int i = 0; i < orderedMoves.length; i++) {
       board.makeMove(orderedMoves[i]);
       final eval = -search(depth - 1, plyFromRoot + 1, -beta, -alpha);
@@ -133,11 +163,17 @@ class Searcher {
         // Move is too good, prune the rest of the branch
         stats.betaCutoffs++;
         if (i == 0) stats.firstMoveCutoffs++;
+        tt.store(board.zobristKey, toTT(beta, plyFromRoot), orderedMoves[i], depth, TranspositionTable.lower);
         return beta;
       }
 
-      alpha = eval > alpha ? eval : alpha;
+      if (eval > alpha) {
+        alpha = eval;
+        bestMoveHere = orderedMoves[i];
+      }
     }
+    final flag = alpha > originalAlpha ? TranspositionTable.exact : TranspositionTable.upper;
+    tt.store(board.zobristKey, toTT(alpha, plyFromRoot), bestMoveHere ?? Move.invalid, depth, flag);
     return alpha;
   }
 
@@ -191,4 +227,8 @@ class Searcher {
 
     return alpha;
   }
+
+  bool isMate(int score) => score.abs() > (mateScore.abs() - 1000);
+  int toTT(int score, int ply) => !isMate(score) ? score : (score > 0 ? score + ply : score - ply);
+  int fromTT(int score, int ply) => !isMate(score) ? score : (score > 0 ? score - ply : score + ply);
 }

@@ -26,7 +26,7 @@ class Move {
       ).toString();
 
   static Move get invalid {
-    return Move(startingSquare: -1, targetSquare: -1);
+    return Move(startingSquare: 0, targetSquare: 0);
   }
 
   int promotingPiece() {

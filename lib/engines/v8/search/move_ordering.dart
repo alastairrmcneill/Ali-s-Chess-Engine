@@ -1,6 +1,7 @@
 import 'package:ace/engines/v8/core/board.dart';
 import 'package:ace/engines/v8/core/move.dart';
 import 'package:ace/engines/v8/core/piece.dart';
+import 'package:ace/engines/v8/search/transposition_table.dart';
 
 class MoveOrdering {
   final Map<int, int> pieceValues = {
@@ -13,12 +14,16 @@ class MoveOrdering {
     Piece.king: 6,
   };
 
-  List<Move> orderMoves(Board board, List<Move> moves) {
-    return moves..sort((a, b) => calculateMoveScore(board, b).compareTo(calculateMoveScore(board, a)));
+  List<Move> orderMoves(Board board, List<Move> moves, {int ttMove = 0}) {
+    return moves
+      ..sort((a, b) {
+        return calculateMoveScore(board, b, ttMove).compareTo(calculateMoveScore(board, a, ttMove));
+      });
   }
 
-  int calculateMoveScore(Board board, Move move) {
+  int calculateMoveScore(Board board, Move move, int ttMove) {
     int score = 0;
+    if (TranspositionTable.packMove(move) == ttMove) return 10000;
     // If promotion?
     score += move.promotingPiece() * 10;
 
