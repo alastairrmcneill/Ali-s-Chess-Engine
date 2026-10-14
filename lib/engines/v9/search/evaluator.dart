@@ -27,19 +27,20 @@ class Evaluator {
     6, 5, 4, 3, 3, 4, 5, 6,
   ];
 
-  final pieceValues = {
-    Piece.pawn: 100,
-    Piece.rook: 500,
-    Piece.knight: 320,
-    Piece.bishop: 330,
-    Piece.queen: 900,
-    Piece.king: 10000,
-  };
+  // Indexed by Piece.type: none, king, pawn, knight, bishop, rook, queen.
+  static const pieceValues = [
+    0,
+    0,
+    100,
+    320,
+    330,
+    500,
+    900,
+  ];
 
   int evaluate(Board board) {
     int whiteMaterialScore = 0;
     int blackMaterialScore = 0;
-    int midgamePhase = 0;
     int mgScore = 0;
     int egScore = 0;
     // index 0 = white, 1 = black
@@ -60,83 +61,59 @@ class Evaluator {
 
       final color = Piece.isColor(piece, Piece.white) ? 0 : 1;
 
+      final sign = color == 0 ? 1 : -1;
+      final sq = color == 0 ? i : i ^ 56;
+
       switch (Piece.type(piece)) {
         case Piece.pawn:
           pawns[color]++;
 
-          if (color == 0) {
-            mgScore += PieceSquareTables.pawnMg[i];
-            egScore += PieceSquareTables.pawnMg[i];
-          } else {
-            mgScore -= PieceSquareTables.pawnMg[i ^ 56];
-            egScore -= PieceSquareTables.pawnMg[i ^ 56];
-          }
+          mgScore += sign * PieceSquareTables.pawnMg[sq];
+          egScore += sign * PieceSquareTables.pawnEg[sq];
 
           break;
         case Piece.knight:
           knights[color]++;
-          if (color == 0) {
-            mgScore += PieceSquareTables.knightMg[i];
-            egScore += PieceSquareTables.knightMg[i];
-          } else {
-            mgScore -= PieceSquareTables.knightMg[i ^ 56];
-            egScore -= PieceSquareTables.knightMg[i ^ 56];
-          }
+          mgScore += sign * PieceSquareTables.knightMg[sq];
+          egScore += sign * PieceSquareTables.knightEg[sq];
           break;
         case Piece.bishop:
           bishops[color]++;
           ((i ~/ 8 + i % 8) % 2 == 0 ? lightBishops : darkBishops)[color]++;
-          if (color == 0) {
-            mgScore += PieceSquareTables.bishopMg[i];
-            egScore += PieceSquareTables.bishopMg[i];
-          } else {
-            mgScore -= PieceSquareTables.bishopMg[i ^ 56];
-            egScore -= PieceSquareTables.bishopMg[i ^ 56];
-          }
+          mgScore += sign * PieceSquareTables.bishopMg[sq];
+          egScore += sign * PieceSquareTables.bishopEg[sq];
           break;
         case Piece.rook:
           rooks[color]++;
-          if (color == 0) {
-            mgScore += PieceSquareTables.rookMg[i];
-            egScore += PieceSquareTables.rookMg[i];
-          } else {
-            mgScore -= PieceSquareTables.rookMg[i ^ 56];
-            egScore -= PieceSquareTables.rookMg[i ^ 56];
-          }
+          mgScore += sign * PieceSquareTables.rookMg[sq];
+          egScore += sign * PieceSquareTables.rookEg[sq];
           break;
         case Piece.queen:
           queens[color]++;
-          if (color == 0) {
-            mgScore += PieceSquareTables.queenMg[i];
-            egScore += PieceSquareTables.queenMg[i];
-          } else {
-            mgScore -= PieceSquareTables.queenMg[i ^ 56];
-            egScore -= PieceSquareTables.queenMg[i ^ 56];
-          }
+          mgScore += sign * PieceSquareTables.queenMg[sq];
+          egScore += sign * PieceSquareTables.queenEg[sq];
           break;
         case Piece.king:
+          mgScore += sign * PieceSquareTables.kingMg[sq];
+          egScore += sign * PieceSquareTables.kingEg[sq];
+
           if (color == 0) {
             whiteKing = i;
-            mgScore += PieceSquareTables.kingMg[i];
-            egScore += PieceSquareTables.kingEg[i];
           } else {
             blackKing = i;
-            mgScore -= PieceSquareTables.kingMg[i ^ 56];
-            egScore -= PieceSquareTables.kingEg[i ^ 56];
           }
           break;
       }
 
       // Count material
-
-      if (Piece.isColor(piece, Piece.white)) {
-        whiteMaterialScore += pieceValues[Piece.type(piece)]!;
-      } else {
-        blackMaterialScore += pieceValues[Piece.type(piece)]!;
+      final type = Piece.type(piece);
+      if (type != Piece.king) {
+        final value = pieceValues[type];
+        color == 0 ? whiteMaterialScore += value : blackMaterialScore += value;
       }
     }
 
-    midgamePhase = min(calculatePhase(), 24);
+    final midgamePhase = min(calculatePhase(), 24);
 
     final noHeavy = pawns[0] + pawns[1] + rooks[0] + rooks[1] + queens[0] + queens[1] == 0;
     if (noHeavy && knights[0] + bishops[0] <= 1 && knights[1] + bishops[1] <= 1) return 0;
@@ -206,6 +183,7 @@ class Evaluator {
   }
 
   bool hasMatingMaterial(int c) {
+    if (pawns[c] > 0 && (queens[c] > 0 || rooks[c] > 0)) return true;
     if (pawns[c] != 0) return false;
     if (queens[c] > 0 || rooks[c] > 0) return true;
     if (knights[c] > 0 && bishops[c] > 0) return true;

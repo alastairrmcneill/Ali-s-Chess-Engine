@@ -14,7 +14,7 @@ class Searcher {
   final Evaluator evaluator = Evaluator();
   final int mateScore = -999999999;
 
-  static const int drawScore = 40;
+  static const int drawScore = 0;
 
   int qCheckDepthLimit = 1;
 

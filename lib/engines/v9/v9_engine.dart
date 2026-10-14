@@ -16,7 +16,7 @@ class V9Engine implements ChessEngine {
   String get id => 'v9';
 
   @override
-  String get displayName => 'V9 - Speed Improvements';
+  String get displayName => 'V9 - Eval Improvements';
 
   @override
   void newGame() {
