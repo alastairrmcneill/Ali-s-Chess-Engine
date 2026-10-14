@@ -8,6 +8,7 @@ import 'package:ace/engines/v5/v5_engine.dart';
 import 'package:ace/engines/v6/v6_engine.dart';
 import 'package:ace/engines/v7/v7_engine.dart';
 import 'package:ace/engines/v8/v8_engine.dart';
+import 'package:ace/engines/v9/v9_engine.dart';
 
 class EngineRegistry {
   /// Real engine versions, ordered oldest → newest. Add a line per new version.
@@ -21,6 +22,7 @@ class EngineRegistry {
     'v6': () => V6Engine(),
     'v7': () => V7Engine(),
     'v8': () => V8Engine(),
+    'v9': () => V9Engine(),
   };
 
   static List<String> get allIds => _versions.keys.toList();
