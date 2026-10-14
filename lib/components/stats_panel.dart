@@ -1,9 +1,29 @@
-import 'package:ace/providers/game_provider.dart';
+import 'package:ace/engines/engine_interface.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 class StatsPanel extends StatelessWidget {
-  const StatsPanel({super.key});
+  final SearchStats? stats;
+  final List<SearchStats> iterations;
+  final bool thinking;
+
+  /// Whether the engine has finished a search, so missing [stats] mean "not supported" rather than "not yet".
+  final bool searched;
+
+  /// Centipawns from white's point of view.
+  final int? evalForWhite;
+
+  /// Whether the engine's iteration evals (side to move's view) need negating to read from white's view.
+  final bool engineIsBlack;
+
+  const StatsPanel({
+    super.key,
+    required this.stats,
+    required this.iterations,
+    required this.thinking,
+    required this.searched,
+    required this.evalForWhite,
+    required this.engineIsBlack,
+  });
 
   static String _count(int value) {
     final digits = value.toString();
@@ -28,28 +48,27 @@ class StatsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final game = context.watch<GameProvider>();
-    final stats = game.stats;
+    final stats = this.stats;
     final theme = Theme.of(context);
 
     // Before the engine's first search there is nothing to show; after it, missing stats mean "not supported".
-    final missing = game.searchesCompleted > 0 && stats == null ? 'n/a' : '–';
+    final missing = searched && stats == null ? 'n/a' : '–';
 
     String value(String? text) => text ?? missing;
 
-    final eval = game.evalForWhite;
+    final eval = evalForWhite;
 
     final tiles = <(String, String)>[
       ('Depth', value(stats?.depth?.toString())),
       ('Eval (White)', value(eval == null ? null : _eval(eval))),
       ('Best move', value(stats?.bestMove)),
+      ('Time', value(stats == null ? null : '${stats.elapsed.inMilliseconds} ms')),
       ('Nodes', value(stats == null ? null : _count(stats.nodes))),
       ('Q-search nodes', value(stats == null ? null : _count(stats.qNodes))),
       ('Transpositions', value(stats == null ? null : _count(stats.transpositions))),
       ('Positions evaluated', value(stats == null ? null : _count(stats.evaluations))),
       ('Max Q depth', value(stats == null ? null : '${stats.maxQDepth} ply')),
     ];
-    final iterations = game.iterations;
 
     return Card(
       child: Padding(
@@ -62,7 +81,7 @@ class StatsPanel extends StatelessWidget {
               children: [
                 Text('Engine search', style: theme.textTheme.titleMedium),
                 const Spacer(),
-                if (game.engineThinking)
+                if (thinking)
                   const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
               ],
             ),
@@ -87,7 +106,7 @@ class StatsPanel extends StatelessWidget {
               const SizedBox(height: 2),
               for (final i in iterations.reversed)
                 Text(
-                  'd${i.depth}  ${i.bestMove == null ? '-' : _eval(game.playerIsWhite ? -(i.eval ?? 0) : (i.eval ?? 0))}  '
+                  'd${i.depth}  ${i.bestMove == null ? '-' : _eval(engineIsBlack ? -(i.eval ?? 0) : (i.eval ?? 0))}  '
                   '${i.bestMove ?? '-'}  ${i.elapsed.inMilliseconds}ms${i.aborted ? '  (aborted)' : ''}',
                   style: theme.textTheme.bodySmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
                 ),
