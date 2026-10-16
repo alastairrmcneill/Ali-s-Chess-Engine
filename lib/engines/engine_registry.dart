@@ -1,6 +1,7 @@
 import 'package:ace/engines/engine_interface.dart';
 import 'package:ace/engines/v0/v0_engine.dart';
 import 'package:ace/engines/v1/v1_engine.dart';
+import 'package:ace/engines/v10/v10_engine.dart';
 import 'package:ace/engines/v2/v2_engine.dart';
 import 'package:ace/engines/v3/v3_engine.dart';
 import 'package:ace/engines/v4/v4_engine.dart';
@@ -23,6 +24,7 @@ class EngineRegistry {
     'v7': () => V7Engine(),
     'v8': () => V8Engine(),
     'v9': () => V9Engine(),
+    'v10': () => V10Engine(),
   };
 
   static List<String> get allIds => _versions.keys.toList();
