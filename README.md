@@ -20,6 +20,7 @@ A.C.E. is a collection of chess engines that get progressively better:
 **v6** - Improved static evaluation (+563 ELO)  
 **v7** - Added book openings for player matches (+0 ELO).
 **v8** - Transposition tables (+147 ELO).  
-**v9** - Eval improvements: PST for endgame, more mopup, efficiency gains (+36 ELO).
+**v9** - Eval improvements: PST for endgame, more mopup, efficiency gains (+36 ELO).  
+**v10** - PeSTO tables for evaluation (+131 ELO).
 
 This project was inspired by an excellent video by Sebastian Lague [here](https://youtu.be/U4ogK0MIzqk?si=Cy8-raNohwVjh4E-).
