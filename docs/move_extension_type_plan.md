@@ -1,377 +1,327 @@
-# v10 — Moves as a 16-bit Extension Type: Implementation Plan
+# v10 — Moves as a 16-bit Extension Type: Build-It-Yourself Plan
 
-A step-by-step plan for replacing the engine's `Move` class with a Dart **extension type** over a
-16-bit `int`. This is the first step towards a faster move generator: every generated move stops
-being a heap object, the transposition table stores complete moves, and move ordering stops
-re-packing moves inside the sort comparator.
+A guided plan for replacing the engine's `Move` class with a Dart **extension type** over a 16-bit
+`int`. It tells you **what** to build and **why**, and gives you checks to prove each step works.
+It doesn't hand you the code. Where you might get stuck there's a hint, hidden behind a
+"Hint" fold. Try first, then open it.
 
-The aim of this version is a **pure representation change**. v10 must search exactly the same
-tree as v9: same moves generated in the same order, same best move, same eval, **same node count**
-at a fixed depth. That gives us a very strong test, and any difference is a bug in the encoding.
-Speed-ups that change search behaviour (score-once ordering, killers, move buffers) come in later
-versions.
-
-Do the phases in order. Each one ends with a **Done when…** checklist.
+Do the phases in order. Each one ends with a **Done when…** checklist. Don't move on until every box
+is ticked.
 
 ---
 
-## 0. Decisions
+## The goal
 
-| Topic                | Decision                                                                                                                                         |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Where                | New snapshot **`lib/engines/v10/`**, copied from v9. v9 and earlier stay frozen. `chess_core`, the referee and the UI keep their own `Move` class |
-| Representation       | `extension type const Move.raw(int value)`: a compile-time type, a plain `int` at runtime (no allocation, no wrapper)                            |
-| Why not plain `int`  | Same speed, but the compiler stops a square, score or depth being passed where a move is expected, and the bit layout lives in one file          |
-| Encoding             | 16 bits: `from` bits 0–5, `to` bits 6–11, `flag` bits 12–15                                                                                       |
-| "No move"            | `Move.none == Move.raw(0)` (a8→a8, never legal). Replaces `Move.invalid`                                                                         |
-| Call-site compatibility | Getter names stay the same (`startingSquare`, `targetSquare`, `promotion`, `castling`, …) and a named-argument constructor matches the old one, so the board and move generator compile unchanged |
-| Behaviour            | **Identical to v9.** No ordering, search or eval changes in this version                                                                          |
-| SDK                  | Raise `environment.sdk` to `>=3.3.0 <4.0.0` (extension types need language 3.3; the lockfile already resolves Dart 3.11)                         |
+Every move the engine generates is currently a heap object (`class Move` with six fields). A search
+creates millions of them. In v10 a move becomes a single small integer. It costs nothing to create,
+compare or store, and it fits directly into the transposition table.
 
-### Flag values
+**v10 must play exactly like v9.** Same moves generated in the same order, same best move, same
+eval, and the **same node count** at a fixed depth. That makes this an easy change to verify: if any
+number differs, you have a bug. Changes that alter search behaviour (better ordering, move buffers)
+come in later versions.
 
-| Flag | Meaning                                    | Old fields it replaces       |
-| ---- | ------------------------------------------ | ---------------------------- |
-| 0    | Normal move (captures included)            | —                            |
-| 1    | En passant capture                         | `enPassantCapture: true`     |
-| 2    | Castling                                   | `castling: true`             |
-| 3    | Pawn two forward                           | `pawnTwoForward: true`       |
-| 4    | Promote to queen                           | `promotion: 1`               |
-| 5    | Promote to knight                          | `promotion: 2`               |
-| 6    | Promote to rook                            | `promotion: 3`               |
-| 7    | Promote to bishop                          | `promotion: 4`               |
+---
 
-`promotion == flag - 3` for flags 4–7, so the existing numbering (and `" qnrb"[promotion]` in
-`uci`) keeps working.
+## Background reading (do this first)
+
+1. **Bit packing.** Make sure you're comfortable with these operators on `int`: `|` (OR), `&` (AND),
+   `<<` and `>>` (shifts). Practise in DartPad: put the number 5 into bits 6–11 of an int, then get
+   it back out.
+2. **Masks.** What decimal value has its lowest 6 bits all set? Write it in hex too. You'll use this
+   number a lot.
+3. **Extension types.** Read the Dart language docs page "Extension types". Answer for yourself:
+   - What is the *representation type*, and what is it at runtime?
+   - What can an extension type declare: getters, methods, constructors, static members?
+   - What *can't* it do that a class can? Think about `toString`, `is` checks and fields.
+   - Which language version introduced them?
+
+<details><summary>Hint: check your answers</summary>
+
+- At runtime an extension type *is* its representation type. The wrapper disappears when the code
+  is compiled.
+- It can have getters, methods, constructors and static members, but no instance fields beyond the
+  representation.
+- It can't override `toString`/`==`/`hashCode`, and `x is Move` can't tell a `Move` from an `int`.
+- Dart 3.3.
+</details>
+
+---
+
+## Phase 0 — Design the encoding (on paper)
+
+Before you write any code, design how a move fits into 16 bits. Write your answers into the PR
+description later. They become the documentation.
+
+1. How many bits do you need for a square index 0–63?
+2. A move needs a from-square and a to-square. How many bits is that? How many are left in 16?
+3. List every *kind* of move the current `Move` class can describe. Look at its boolean fields
+   and the `promotion` int. Can a single move ever be two kinds at once? Is a capture a "kind",
+   or can the board tell you that?
+4. Give each kind a small number (a "flag"). Do they fit in the bits that are left?
+5. **Try to pick the promotion flag numbers** so that turning a flag back into the old
+   `promotion` value (1 = queen, 2 = knight, 3 = rook, 4 = bishop) is a single subtraction.
+   That way `promotingPiece()` and the UCI string code keep working unchanged.
+6. Which packed value can never be a legal move? Use it to mean "no move". Check what the current
+   `Move.invalid` and `TranspositionTable.packMove(Move.invalid)` produce. Does your choice match?
+
+<details><summary>Hint: a common layout</summary>
+
+From in bits 0–5, to in bits 6–11, flag in bits 12–15. Flags: normal, en passant, castling, pawn
+two forward, then the four promotions in queen/knight/rook/bishop order, so `promotion = flag - 3`.
+`0` is a8→a8, which is never legal.
+</details>
+
+**Done when…**
+
+- [ ] You have a written table of bit positions and flag values.
+- [ ] You can encode and decode a move like e7e8=N by hand, on paper.
 
 ---
 
 ## Phase 1 — Snapshot v9 as v10
 
-No behaviour change. Just a new version that is byte-for-byte v9 apart from names.
+A new version that behaves exactly like v9. No logic changes.
 
-1. Copy the folder: `cp -r lib/engines/v9 lib/engines/v10`.
-2. In every file under `lib/engines/v10/`, change `package:ace/engines/v9/` to
-   `package:ace/engines/v10/`.
-3. Rename `v9_engine.dart` to `v10_engine.dart`, and `V9Engine` to `V10Engine`.
-   - `id => 'v10'`
-   - `displayName => 'V10 - Packed moves'`
-   - The error message `'v9 move generator does not consider …'` becomes `v10`.
-4. Register it in `lib/engines/engine_registry.dart`:
-   ```dart
-   import 'package:ace/engines/v10/v10_engine.dart';
-   ...
-   'v10': () => V10Engine(),
-   ```
+1. Copy `lib/engines/v9/` to `lib/engines/v10/`.
+2. Fix every import inside v10 so it points at v10, not v9. (Search for it. Missing one is easy.)
+3. Rename the engine file and class, and give it a new `id` and `displayName`. Check for any
+   error messages that mention "v9".
+4. Register the new engine in `lib/engines/engine_registry.dart`.
+5. Look at how `perft_all_versions_test.dart` and `mate_all_versions_test.dart` find engines.
+   Will they pick up v10 automatically?
 
 **Done when…**
 
-- [ ] `grep -rn "engines/v9" lib/engines/v10` returns nothing.
-- [ ] `flutter test test/engines/snapshot_purity_test.dart` passes. It checks that v10 only imports
-      v10, `chess_core/notation` and the engine interface.
-- [ ] `flutter test test/engines/` passes. `perft_all_versions_test` and `mate_all_versions_test`
-      pick up v10 through the registry.
-- [ ] Commit: *"v10: snapshot of v9"*.
+- [ ] A search for `engines/v9` inside `lib/engines/v10` finds nothing.
+- [ ] `test/engines/snapshot_purity_test.dart` passes. Read it first so you know what it enforces.
+- [ ] All of `test/engines/` passes, with v10 included.
+- [ ] Committed on its own: "v10: snapshot of v9". A clean baseline commit makes later diffs easy to
+      review.
 
 ---
 
-## Phase 2 — Raise the SDK constraint
+## Phase 2 — Allow extension types
 
-In `pubspec.yaml`:
-
-```yaml
-environment:
-  sdk: ">=3.3.0 <4.0.0"
-```
+Your `pubspec.yaml` currently allows Dart 3.1. Work out what needs to change so extension types are
+allowed. Check the `sdks:` section of `pubspec.lock` to confirm the change is safe for the SDK you
+actually use.
 
 **Done when…**
 
-- [ ] `flutter pub get` succeeds and `flutter analyze` shows no new issues.
+- [ ] `flutter pub get` and `flutter analyze` both succeed.
 
 ---
 
-## Phase 3 — The new `Move` type
+## Phase 3 — Build the `Move` extension type
 
-Replace `lib/engines/v10/core/move.dart` entirely:
+Rewrite `lib/engines/v10/core/move.dart`. Before you start, list every member the current class
+has, then search `lib/engines/v10` to see which of them are actually used and where. That list is
+your spec: anything used must still work afterwards.
 
-```dart
-import 'package:ace/chess_core/notation/board_helper.dart';
-import 'package:ace/chess_core/notation/uci.dart';
-import 'package:ace/engines/v10/core/piece.dart';
+### 3a. The type itself
 
-/// A move packed into 16 bits: from (bits 0-5), to (6-11), flag (12-15).
-/// At runtime this is a plain int, so creating, storing and comparing moves allocates nothing.
-extension type const Move.raw(int value) {
-  static const int flagNone = 0;
-  static const int flagEnPassant = 1;
-  static const int flagCastling = 2;
-  static const int flagPawnTwoForward = 3;
-  static const int flagPromoteQueen = 4; // 5 knight, 6 rook, 7 bishop
+- Declare an extension type over `int` named `Move`. Give its primary constructor a name (e.g.
+  `raw`), so that the plain `Move(...)` name is free for step 3c.
+- Add `static const` values for each flag from Phase 0, and a `static const` for "no move".
 
-  /// a8 -> a8 can never be a legal move, so 0 means "no move".
-  static const Move none = Move.raw(0);
+### 3b. Decoding: getters
 
-  /// Positional constructor for hot paths.
-  Move.encode(int from, int to, [int flag = flagNone]) : value = from | (to << 6) | (flag << 12);
+Add a getter for each piece of information you can read from a move, **using the same names as
+the old class fields**. Then the board and move generator won't need to change. You'll need:
 
-  /// Same named arguments as the old class, so existing call sites compile unchanged.
-  Move({
-    required int startingSquare,
-    required int targetSquare,
-    bool enPassantCapture = false,
-    bool pawnTwoForward = false,
-    int promotion = 0,
-    bool castling = false,
-  }) : value = startingSquare |
-            (targetSquare << 6) |
-            ((promotion != 0
-                    ? promotion + 3
-                    : enPassantCapture
-                        ? flagEnPassant
-                        : castling
-                            ? flagCastling
-                            : pawnTwoForward
-                                ? flagPawnTwoForward
-                                : flagNone) <<
-                12);
+- the from-square and to-square (shift, then mask)
+- the raw flag
+- one `bool` getter per special move kind
+- `promotion`, returning the old 1–4 numbering, or 0
+- a way to ask "is this the no-move value?"
 
-  int get startingSquare => value & 0x3F;
-  int get targetSquare => (value >> 6) & 0x3F;
-  int get flag => value >> 12;
+Then bring across `promotingPiece()`, `uci` and `toChessNotation()`. Do they need any changes, given
+your getters keep their old names?
 
-  bool get isNone => value == 0;
-  bool get enPassantCapture => flag == flagEnPassant;
-  bool get castling => flag == flagCastling;
-  bool get pawnTwoForward => flag == flagPawnTwoForward;
-  bool get isPromotion => flag >= flagPromoteQueen;
+### 3c. Encoding: constructors
 
-  /// 1 queen, 2 knight, 3 rook, 4 bishop, 0 none (same numbering as v9).
-  int get promotion => isPromotion ? flag - 3 : 0;
+You want two:
 
-  int promotingPiece() {
-    switch (promotion) {
-      case 1:
-        return Piece.queen;
-      case 2:
-        return Piece.knight;
-      case 3:
-        return Piece.rook;
-      case 4:
-        return Piece.bishop;
-      default:
-        return Piece.none;
-    }
-  }
+1. **A fast positional constructor** taking `(from, to, [flag])`. This is what a future, faster
+   move generator will use.
+2. **A compatibility constructor** with exactly the same named parameters as the old class
+   (`startingSquare:`, `targetSquare:`, `enPassantCapture:`, …). It works out the right flag from
+   the booleans and the promotion number. This is what lets `move_generator.dart` compile untouched.
 
-  String get uci => UciMove(
-        from: startingSquare,
-        to: targetSquare,
-        promotion: promotion == 0 ? null : " qnrb"[promotion],
-      ).toString();
+Constructors on an extension type must initialise the representation value in an initializer list.
+Work out how to do that from the language docs.
 
-  String toChessNotation() {
-    String files = "abcdefgh";
+<details><summary>Hint: if the compatibility constructor won't compile</summary>
 
-    int startingFile = BoardHelper.getFileFromIndex(startingSquare);
-    int startingRank = 8 - BoardHelper.getRankFromIndex(startingSquare);
-    int targetFile = BoardHelper.getFileFromIndex(targetSquare);
-    int targetRank = 8 - BoardHelper.getRankFromIndex(targetSquare);
+If the analyzer rejects an unnamed constructor alongside the named primary one, turn the
+compatibility version into a `static Move create({...})` method instead. Then do a search-and-replace
+of `Move(` to `Move.create(` in the move generator only.
+</details>
 
-    return "${files[startingFile]}$startingRank${files[targetFile]}$targetRank";
-  }
-}
-```
+### 3d. Things to delete
 
-What was removed, and what replaces it:
+- `isSameAs`: what replaces it, now that a move is an int?
+- `toString`: why can't you keep it? What will `print(move)` show now, and what should you log instead?
+- `Move.invalid`: replace it with your no-move constant, and update every caller.
 
-| Old                  | New                                                                         |
-| -------------------- | --------------------------------------------------------------------------- |
-| `Move.invalid`       | `Move.none`                                                                 |
-| `isSameAs(other)`    | `==` (compares the ints, so it is true exactly when every field matches)   |
-| `toString()` override | Not possible on an extension type. `print(move)` shows a number, so log `move.uci` |
+### 3e. Write the tests *before* moving on
 
-`board.dart` and `move_generator.dart` should compile **without edits**. They only use the
-named constructor and the getters above.
+Create `test/engines/v10_move_test.dart`. Design tests that would catch any mistake in your
+encoding:
 
-### Tests: `test/engines/v10_move_test.dart`
-
-1. **Round trip, exhaustive.** For every `from` 0–63, every `to` 0–63 and every flag 0–7, build
-   `Move.encode(from, to, flag)` and check `startingSquare`, `targetSquare` and `flag` come back
-   unchanged. That is 32,768 cases and runs in milliseconds.
-2. **Named constructor matches the old fields.** One case each:
-   - normal
-   - en passant
-   - castling
-   - pawn two forward
-   - each of the 4 promotions
-
-   Check `enPassantCapture`, `castling`, `pawnTwoForward`, `promotion` and `promotingPiece()`.
-3. **UCI strings.**
-   - `Move(startingSquare: 52, targetSquare: 36).uci == 'e2e4'`
-   - a promotion gives `'e7e8q'`, `'e7e8n'`, …
-4. **None.** `Move.none.isNone`, `Move.none.value == 0`, and no legal move from the start position
-   `isNone`.
-5. **Equality.** Two moves built separately with the same fields are `==`; a different flag makes
-   them `!=`.
+- **Round trip.** Encode and then decode *every* combination of from, to and flag. How many cases is
+  that? Is it small enough to loop over all of them?
+- **Compatibility constructor.** One test per move kind, checking every getter: normal, en passant,
+  castling, double push and each of the four promotions.
+- **UCI strings.** A normal move (e.g. e2e4) and each promotion letter. You'll need the square
+  indices: remember a8 is 0 in this engine.
+- **No move.** The constant decodes as "no move", and no legal move from the start position does.
+- **Equality.** Two separately built identical moves are `==`. Changing only the flag makes them
+  different.
 
 **Done when…**
 
-- [ ] `flutter analyze` is clean for `lib/engines/v10`.
-- [ ] `v10_move_test.dart` passes.
-- [ ] `grep -rn "isSameAs\|Move.invalid" lib/engines/v10` returns nothing.
+- [ ] `flutter analyze` is clean for `lib/engines/v10`. If `board.dart` or `move_generator.dart`
+      needed edits, ask yourself why: a getter or constructor probably doesn't match the old API.
+- [ ] Your move tests pass.
+- [ ] No `isSameAs` or `Move.invalid` remains in v10.
 
 ---
 
 ## Phase 4 — Transposition table
 
-File: `lib/engines/v10/search/transposition_table.dart`
+Open `lib/engines/v10/search/transposition_table.dart` and read `packMove`.
 
-1. Delete `packMove`.
-2. `final Int32List _moves` becomes `final Uint16List _moves`, created with `Uint16List(1 << sizePower)`.
-3. `int moveAt(int slot) => _moves[slot];` becomes `Move moveAt(int slot) => Move.raw(_moves[slot]);`
-4. In `store`: `_moves[i] = packMove(move);` becomes `_moves[i] = move.value;`
-
-The stored move now keeps its flags, so a TT move is a complete, playable move. Nothing uses that
-yet. It's what makes "try the TT move before generating moves" possible later.
+1. Compare `packMove` with your encoding. What information does it **throw away**? Why didn't
+   that matter in v9?
+2. Remove `packMove`. Store the move's own value instead.
+3. What is the smallest typed-data list that can hold your move values? Switch the moves array to
+   it. How much memory does that save at the default table size?
+4. Change the signatures so `store` takes a `Move` and `moveAt` returns a `Move`, not an `int`.
+   Keeping these typed is what stops you storing a depth or a score in the move slot by accident.
 
 **Done when…**
 
-- [ ] `grep -rn "packMove" lib/engines/v10` returns nothing.
+- [ ] `packMove` is gone and no plain `int` crosses the TT's API for a move.
 
 ---
 
 ## Phase 5 — Move ordering
 
-File: `lib/engines/v10/search/move_ordering.dart`
+Open `lib/engines/v10/search/move_ordering.dart`.
 
-1. Change the parameter in both methods: `{int ttMove = 0}` / `int ttMove` become
-   `{Move ttMove = Move.none}` / `Move ttMove`.
-2. `if (TranspositionTable.packMove(move) == ttMove) return 10000;` becomes
-   `if (move == ttMove) return 10000;`
-3. Remove the now-unused `transposition_table.dart` import.
+1. Change the `ttMove` parameter type from `int` to `Move`. What should its default value be?
+2. Simplify the "is this the TT move?" check now that both sides are the same type.
+3. Remove any import that's no longer needed.
 
-**Leave the comparator exactly as it is**, double scoring included. Fixing that changes the order
-of equally scored moves and would break the node-count equivalence in Phase 8. It is the first
-item under *Next steps*.
+⚠️ **Don't fix the double-scoring comparator yet**, even though you know how. Ask yourself: why
+would fixing it now break the Phase 8 test? (Think about moves with equal scores.)
 
 ---
 
 ## Phase 6 — Searcher
 
-File: `lib/engines/v10/search/searcher.dart`
+Open `lib/engines/v10/search/searcher.dart` and let the analyzer guide you. Fix each error it
+reports. While you're there, think about:
 
-| Line (v9)                                              | Change to                                         |
-| ------------------------------------------------------ | ------------------------------------------------- |
-| `int ttMove = 0;`                                      | `Move ttMove = Move.none;`                        |
-| `ttMove = tt.moveAt(slot);`                            | unchanged (now returns `Move`)                    |
-| `bestMoveHere ?? Move.invalid`                         | `bestMoveHere ?? Move.none`                       |
-| `orderedMoves.where((m) => m != iterationBestMove)`   | unchanged. It now compares by value, which gives the same result since a list never holds the same move twice |
-
-`Move?` stays nullable in `bestMove`, `iterationBestMove`, `bestMoveHere` and `getBestMove`'s
-return type. Small ints are stored directly by the Dart VM, so a nullable `Move` costs no
-allocation. Switching to a `Move.none` sentinel everywhere is optional tidying, not needed here.
+1. Where does the searcher hold the TT move as an `int`? Change it to `Move`.
+2. Where does it fall back to `Move.invalid`?
+3. Find the line that removes the best move from the root move list with `!=`. In v9, did that
+   compare *identity* or *values*? What does it compare now? Does the result change? Why not?
+4. `Move?` (nullable) appears in several places. Is a nullable small int expensive in Dart? Look up
+   how the Dart VM represents small integers ("Smi"). Decide whether to keep `Move?` or use your
+   no-move constant, and be consistent.
 
 ---
 
-## Phase 7 — Adapter
+## Phase 7 — Adapter and perft
 
-File: `lib/engines/v10/v10_engine.dart`
-
-There's nothing to change. `moveToUci` uses `move.uci`, `getMove` matches candidates by their UCI
-string, and perft only counts moves. Read it through once to confirm it compiles.
+Read `lib/engines/v10/v10_engine.dart` top to bottom. It converts moves to UCI strings and runs
+perft. Does anything need to change? Explain to yourself why or why not.
 
 **Done when…**
 
 - [ ] `flutter analyze` is clean.
-- [ ] `flutter test test/engines/` passes. Perft must give exactly the expected counts, including
-      the Kiwipete and position 4 promotion and castling cases.
+- [ ] All of `test/engines/` passes, and perft gives exactly the expected counts for v10. Pay
+      special attention to the promotion and castling positions (Kiwipete, position 4). If your
+      flags are wrong, that's where it shows.
 
 ---
 
 ## Phase 8 — Prove v10 searches exactly like v9
 
-New file: `test/engines/v9_v10_packed_move_equivalence_test.dart`. Copy the structure of
-`v7_v8_transposition_comparison_test.dart`: same `_Position` list, same `_run` helper, fixed
-depth, no time limit.
+This is your strongest test. Create `test/engines/v9_v10_packed_move_equivalence_test.dart`, using
+`v7_v8_transposition_comparison_test.dart` as your model.
 
-For every position, assert:
+1. Reuse its fixed-depth position list. Why must this test use a **fixed depth** and not a time
+   limit?
+2. For each position, run both engines and assert they produce the same move, eval, **node count**
+   and transposition count.
+3. Print a table of v9 time vs v10 time. Why should you *print* the timing rather than *assert* on
+   it?
 
-```dart
-expect(v10.move, v9.move, reason: p.name);
-expect(v10.eval, v9.eval, reason: p.name);
-expect(v10.nodes, v9.nodes, reason: p.name);   // the strong one
-expect(v10.transpositions, v9.transpositions, reason: p.name);
-```
+Before you run it, write down **why** the node counts should be identical. Your answer should
+cover:
 
-Print a table with v9 ms, v10 ms and the speed-up per position. Timing is reported, not asserted,
-because it is too noisy for CI.
+- move generation order
+- the sort comparator
+- the TT move check
+- the no-move value
 
-Why the node counts must match exactly:
+If counts differ, debug in this order:
 
-- Move generation is untouched, so the moves come out in the same order.
-- The ordering comparator is unchanged and `List.sort` is deterministic for the same input.
-- A TT move matches the same move as before. Flags are fully determined by from/to in a given
-  position, so adding them to the stored move changes no comparison result.
-- `Move.none` packs to 0, as `Move.invalid` did.
-
-If a count differs, the encoding or one of the changed call sites is wrong. The usual suspects:
-
-- a promotion flag off by one
-- `ttMove` still compared as a raw int somewhere
-- a missed `Move.invalid`
+1. A promotion flag off by one.
+2. A TT move still compared or stored as a raw int somewhere.
+3. A missed `Move.invalid`.
+4. The compatibility constructor picking the wrong flag when several booleans are passed.
 
 **Done when…**
 
-- [ ] The equivalence test passes on every position.
-- [ ] v10 is faster in total. Record the numbers.
+- [ ] Every position matches exactly.
+- [ ] v10 is faster in total, with the numbers recorded.
 
 ---
 
-## Phase 9 — Benchmark, match, document
+## Phase 9 — Measure and document
 
-1. **Perft speed.** Time `V10Engine().perft(startpos, 5)` against v9 and note nodes per second.
-   Most of this version's gain should show up here, since perft is almost pure generation plus
-   make/unmake.
-2. **Match.** Run `dart run bin/match.dart` v10 vs v9 at your usual `--movetime`. With identical
-   search, any Elo gain comes only from reaching deeper in the same time, so expect a small
-   positive result, not a big one.
-3. **README.** Add the line:
-   `**v10** - Moves packed into 16-bit ints (+N ELO).`
+1. **Perft speed.** Time perft depth 5 from the start position for v9 and v10. Work out nodes per
+   second for each. Perft is mostly move generation plus make/unmake. Why does that make it the
+   best place to see this change?
+2. **Match.** Play v10 against v9 with `bin/match.dart`. Before you look at the result, predict it:
+   the search is identical, so where could any Elo gain come from? How big do you expect it to be?
+3. **README.** Add the v10 line in the same style as the others.
 
 **Done when…**
 
-- [ ] Perft nps and the match result are recorded in the PR description.
+- [ ] Perft nps, the equivalence table and the match result are in the PR description.
 - [ ] README updated.
 
 ---
 
-## Pitfalls checklist
+## Self-review checklist
 
-- [ ] **Promotion mapping.** Flags 4–7 are queen, knight, rook, bishop, matching `promotion` 1–4. A
-      capture that promotes is still flag 4–7. The board tells you a piece was taken.
-- [ ] **Raw ints leaking in.** Keep `Move` in every signature (`store(..., Move move, ...)`,
-      `moveAt` returns `Move`). Only `move_list`-style buffers and the TT array should touch
-      `.value` / `Move.raw`.
-- [ ] **No `is Move` checks.** At runtime a `Move` is an `int`, so a type test can't tell them apart.
-- [ ] **Logging.** `"$move"` prints a number. Use `move.uci`.
-- [ ] **Web.** 16-bit values are safe under dart2js. Only 64-bit bitboards have the JS integer problem.
-- [ ] **`GameState` is unchanged.** It never stored the move, and `unMakeMove` gets the move as a
-      parameter.
+Before opening the PR, check each of these against your own code:
+
+- [ ] Flags 4–7 decode to the right promotion piece, including capture-promotions.
+- [ ] Every function that takes or returns a move uses `Move`, not `int`. Only the TT array
+      touches the raw value.
+- [ ] No `is Move` checks anywhere. Why would they be wrong?
+- [ ] No log or error message prints a move with `"$move"`.
+- [ ] `GameState` is unchanged. Confirm it never stored a move.
+- [ ] You can explain why 16-bit moves are safe on the web build, while 64-bit bitboards wouldn't be.
 
 ---
 
-## Next steps (separate versions, each measured on its own)
+## What comes next (separate versions)
 
-These change search behaviour, so node counts will no longer match v9. Measure them with
-time-to-depth, nodes per second and matches.
+Each of these changes search behaviour, so node counts will no longer match v9. Judge them by
+time-to-depth, nodes per second and match results. Write a plan like this one for each before
+starting.
 
-1. **Score each move once.** Replace the sort comparator with a scored insertion sort, or with
-   pick-best-as-you-go using a per-ply score buffer. Also change `pieceValues` from a `Map` to a
-   `const List`.
-2. **Per-ply move buffers.** A `MoveList` with a `Uint16List(218)` plus a count, one per ply. The
-   generator writes into it instead of building a new `List<Move>` on every call.
-3. **Better ordering.** Killer moves and a history table. Track
-   `firstMoveCutoffs / betaCutoffs` in `SearchStats` and aim for 90%+.
-4. **TT move first.** Try it before generating any moves. This needs a legality check because of
-   hash collisions.
-5. **Bitboards.** Covered in its own plan.
+1. **Score each move once** instead of inside the sort comparator. Compare a scored insertion
+   sort with pick-best-as-you-go.
+2. **Per-ply move buffers.** Stop building a new list on every call to the move generator.
+3. **Killer moves and history.** Use `firstMoveCutoffs / betaCutoffs` to measure ordering quality.
+4. **Try the TT move before generating moves.** What new check does this need, and why?
+5. **Bitboards.**
