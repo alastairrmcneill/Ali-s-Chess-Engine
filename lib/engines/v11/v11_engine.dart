@@ -16,7 +16,7 @@ class V11Engine implements ChessEngine {
   String get id => 'v11';
 
   @override
-  String get displayName => 'V11 - Move Packing';
+  String get displayName => 'V11 - Speed Optimisations';
 
   @override
   void newGame() {

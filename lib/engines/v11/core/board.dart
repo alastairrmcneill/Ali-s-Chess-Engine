@@ -50,8 +50,8 @@ class Board {
     gameState.zobristKey = zobristKey;
 
     // Who is moving to where
-    int selectedPiece = position[move.startingSquare];
-    int capturedPiece = position[move.targetSquare];
+    int selectedPiece = position[move.from];
+    int capturedPiece = position[move.to];
     int color = whiteToPlay ? Piece.white : Piece.black;
 
     gameState.enPassantSquare = enPassantSquare;
@@ -59,13 +59,13 @@ class Board {
     int startingCastlingIndex = castlingRightsAsInt();
 
     // Remove selected piece from start square zobrist
-    zobristKey ^= Zobrist.piecesArray[selectedPiece][move.startingSquare]; // Remove starting peice from starting square
+    zobristKey ^= Zobrist.piecesArray[selectedPiece][move.from]; // Remove starting peice from starting square
 
     // Handle En passant file
     zobristKey ^= Zobrist.enPassantSquares[enPassantSquare + 1]; // Remove old enpassant square
     if (move.pawnTwoForward) {
       int direction = whiteToPlay ? -8 : 8;
-      enPassantSquare = move.targetSquare - direction;
+      enPassantSquare = move.to - direction;
     } else {
       enPassantSquare = -1;
     }
@@ -80,7 +80,7 @@ class Board {
     // Handle en passant captures
     if (move.enPassantCapture) {
       int direction = whiteToPlay ? 8 : -8;
-      int enPassantCaptureSquare = move.targetSquare + direction;
+      int enPassantCaptureSquare = move.to + direction;
 
       zobristKey ^= Zobrist.piecesArray[position[enPassantCaptureSquare]]
           [enPassantCaptureSquare]; // Remove en passant capture square from zobrist
@@ -91,8 +91,8 @@ class Board {
     // Castling
     if (move.castling) {
       int castlingRank = whiteToPlay ? 7 : 0;
-      int rookStartingIndex = move.targetSquare % 8 == 2 ? castlingRank * 8 + 0 : castlingRank * 8 + 7;
-      int rookTargetIndex = move.targetSquare % 8 == 2 ? castlingRank * 8 + 3 : castlingRank * 8 + 5;
+      int rookStartingIndex = move.to % 8 == 2 ? castlingRank * 8 + 0 : castlingRank * 8 + 7;
+      int rookTargetIndex = move.to % 8 == 2 ? castlingRank * 8 + 3 : castlingRank * 8 + 5;
 
       position[rookTargetIndex] = position[rookStartingIndex];
       position[rookStartingIndex] = 0;
@@ -121,30 +121,30 @@ class Board {
       }
     } else if (Piece.type(selectedPiece) == Piece.rook) {
       if (whiteToPlay) {
-        if (move.startingSquare == 56) {
+        if (move.from == 56) {
           whiteCastleQueenSide = false;
-        } else if (move.startingSquare == 63) {
+        } else if (move.from == 63) {
           whiteCastleKingSide = false;
         }
       } else {
-        if (move.startingSquare == 0) {
+        if (move.from == 0) {
           blackCastleQueenSide = false;
-        } else if (move.startingSquare == 7) {
+        } else if (move.from == 7) {
           blackCastleKingSide = false;
         }
       }
     }
     if (Piece.type(capturedPiece) == Piece.rook) {
       if (Piece.isColor(capturedPiece, Piece.white)) {
-        if (move.targetSquare == 56) {
+        if (move.to == 56) {
           whiteCastleQueenSide = false;
-        } else if (move.targetSquare == 63) {
+        } else if (move.to == 63) {
           whiteCastleKingSide = false;
         }
       } else {
-        if (move.targetSquare == 0) {
+        if (move.to == 0) {
           blackCastleQueenSide = false;
-        } else if (move.targetSquare == 7) {
+        } else if (move.to == 7) {
           blackCastleKingSide = false;
         }
       }
@@ -158,11 +158,11 @@ class Board {
     // End of castling
 
     // Update positions
-    position[move.targetSquare] = selectedPiece;
-    position[move.startingSquare] = 0;
+    position[move.to] = selectedPiece;
+    position[move.from] = 0;
 
-    zobristKey ^= Zobrist.piecesArray[capturedPiece][move.targetSquare]; // Remove piece from target square
-    zobristKey ^= Zobrist.piecesArray[selectedPiece][move.targetSquare]; // Add starting piece to target square
+    zobristKey ^= Zobrist.piecesArray[capturedPiece][move.to]; // Remove piece from target square
+    zobristKey ^= Zobrist.piecesArray[selectedPiece][move.to]; // Add starting piece to target square
 
     // Swap sides
     whiteToPlay = !whiteToPlay;
@@ -179,7 +179,7 @@ class Board {
   }
 
   unMakeMove(Move move) {
-    int selectedPiece = position[move.targetSquare]; // The piece at the end square of the move we are undo
+    int selectedPiece = position[move.to]; // The piece at the end square of the move we are undo
     int color = whiteToPlay ? Piece.black : Piece.white; // The last move was the opposite of the current state
     int capturedPiece = gameStateHistory.last.capturedPiece;
 
@@ -191,8 +191,8 @@ class Board {
     // Handle castles
     if (move.castling) {
       int castlingRank = whiteToPlay ? 0 : 7; // other way round
-      int rookStartingIndex = move.targetSquare % 8 == 2 ? castlingRank * 8 + 0 : castlingRank * 8 + 7;
-      int rookTargetIndex = move.targetSquare % 8 == 2 ? castlingRank * 8 + 3 : castlingRank * 8 + 5;
+      int rookStartingIndex = move.to % 8 == 2 ? castlingRank * 8 + 0 : castlingRank * 8 + 7;
+      int rookTargetIndex = move.to % 8 == 2 ? castlingRank * 8 + 3 : castlingRank * 8 + 5;
 
       position[rookStartingIndex] = position[rookTargetIndex];
       position[rookTargetIndex] = 0;
@@ -221,30 +221,30 @@ class Board {
     } else if (Piece.type(selectedPiece) == Piece.rook) {
       if (!whiteToPlay) {
         // Opposite because of previous go
-        if (move.startingSquare == 56) {
+        if (move.from == 56) {
           whiteCastleQueenSide = gameStateHistory.last.whiteCastleQueenSide;
-        } else if (move.startingSquare == 63) {
+        } else if (move.from == 63) {
           whiteCastleKingSide = gameStateHistory.last.whiteCastleKingSide;
         }
       } else {
-        if (move.startingSquare == 0) {
+        if (move.from == 0) {
           blackCastleQueenSide = gameStateHistory.last.blackCastleQueenSide;
-        } else if (move.startingSquare == 7) {
+        } else if (move.from == 7) {
           blackCastleKingSide = gameStateHistory.last.blackCastleKingSide;
         }
       }
     }
     if (Piece.type(capturedPiece) == Piece.rook) {
       if (Piece.isColor(capturedPiece, Piece.white)) {
-        if (move.targetSquare == 56) {
+        if (move.to == 56) {
           whiteCastleQueenSide = gameStateHistory.last.whiteCastleQueenSide;
-        } else if (move.targetSquare == 63) {
+        } else if (move.to == 63) {
           whiteCastleKingSide = gameStateHistory.last.whiteCastleKingSide;
         }
       } else {
-        if (move.targetSquare == 0) {
+        if (move.to == 0) {
           blackCastleQueenSide = gameStateHistory.last.blackCastleQueenSide;
-        } else if (move.targetSquare == 7) {
+        } else if (move.to == 7) {
           blackCastleKingSide = gameStateHistory.last.blackCastleKingSide;
         }
       }
@@ -253,11 +253,11 @@ class Board {
     // Handle en passant captures
     if (move.enPassantCapture) {
       int direction = whiteToPlay ? -8 : 8; // The last move was the opposite of the current state
-      int enPassantCaptureSquare = move.targetSquare + direction;
+      int enPassantCaptureSquare = move.to + direction;
 
       position[enPassantCaptureSquare] = capturedPiece;
       capturedPiece = 0;
-      enPassantSquare = move.targetSquare;
+      enPassantSquare = move.to;
     }
 
     enPassantSquare = gameStateHistory.last.enPassantSquare;
@@ -268,8 +268,8 @@ class Board {
     zobristKey = gameStateHistory.last.zobristKey;
     gameStateHistory.removeLast();
 
-    position[move.startingSquare] = selectedPiece;
-    position[move.targetSquare] = capturedPiece;
+    position[move.from] = selectedPiece;
+    position[move.to] = capturedPiece;
     whiteToPlay = !whiteToPlay;
   }
 

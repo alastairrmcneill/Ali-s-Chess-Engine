@@ -115,7 +115,7 @@ class Searcher {
 
     // Probe the transposition table
     final originalAlpha = alpha;
-    int ttMove = 0;
+    Move ttMove = Move.invalid;
     final slot = tt.probe(board.zobristKey);
 
     if (slot != null) {
