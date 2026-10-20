@@ -4,6 +4,7 @@ import 'package:ace/engines/engine_interface.dart';
 import 'package:ace/engines/v11/core/board.dart';
 import 'package:ace/engines/v11/core/move.dart';
 import 'package:ace/engines/v11/core/move_generator.dart';
+import 'package:ace/engines/v11/core/piece.dart';
 import 'package:ace/engines/v11/search/evaluator.dart';
 import 'package:ace/engines/v11/search/move_ordering.dart';
 import 'package:ace/engines/v11/search/transposition_table.dart';
@@ -15,6 +16,10 @@ class Searcher {
   final TranspositionTable tt = TranspositionTable();
   final Evaluator evaluator = Evaluator();
   final int mateScore = -999999999;
+  final int deltaMargin = 200;
+  final int deltaMinPhase = 4;
+  final int _queenValue = Evaluator.pieceValues[Piece.queen];
+  final int _pawnValue = Evaluator.pieceValues[Piece.pawn];
 
   static const int drawScore = 0;
 
@@ -199,7 +204,9 @@ class Searcher {
     final inCheck = moveGenerator.isInCheck(board);
     if (inCheck) stats.qCheckNodes++;
 
-    // TODO: moves = moveGenerator.generateLegalMoves(board);
+    int standPat = 0;
+    bool canPrune = false;
+
     if (inCheck && qDepth < qCheckDepthLimit) {
       // Can't stand pat in check, every legal reply has to be considered.
       moves = moveGenerator.generateLegalMoves(board);
@@ -207,18 +214,26 @@ class Searcher {
     } else {
       // Too deep to search every evasion, but still notice checkmate.
       if (inCheck && moveGenerator.generateLegalMoves(board).isEmpty) return mateScore + plyFromRoot;
-      // TODO: moves = moveGenerator.generateLegalMoves(board);
-      // TODO: if (inCheck && moves.isEmpty) return mateScore + plyFromRoot;
 
       stats.evaluations++;
-      final standPat = evaluator.evaluate(board);
+      standPat = evaluator.evaluate(board);
+      final phase = evaluator.calculatePhase();
       if (standPat >= beta) {
         stats.qBetaCutoffs++;
         return beta;
       }
+      canPrune = !inCheck && phase >= deltaMinPhase;
+
+      // Optional whole-node test, placed BEFORE generating moves so it saves the movegen too
+      // If we can capture a queen with a pawn and promote to a queen in one move and it still isn't within our cut off
+      // Then lets we aren't going to search it.
+      if (canPrune && standPat + _queenValue + _queenValue - _pawnValue + deltaMargin < alpha) {
+        stats.deltaPrunedMoves++;
+        return alpha;
+      }
+
       alpha = standPat > alpha ? standPat : alpha;
       moves = moveGenerator.generateLegalMoves(board, includeQuietMoves: false);
-      // TODO: moves = moves.where((m) => (board.position[m.to] != Piece.none || m.enPassantCapture)).toList();
     }
 
     Int32List scores = _plyScores[plyFromRoot];
@@ -227,6 +242,13 @@ class Searcher {
     for (int i = 0; i < moves.length; i++) {
       moveOrdering.pickBest(moves, scores, i);
       final move = moves[i];
+
+      // Even winning this capture can't lift us to alpha. Must run before makeMove (reads the target square).
+      if (canPrune && standPat + _captureGain(move) + deltaMargin < alpha) {
+        stats.deltaPrunedMoves++;
+        continue;
+      }
+
       board.makeMove(move);
       final eval = -quiescenceSearch(-beta, -alpha, plyFromRoot + 1, qDepth + 1);
       board.unMakeMove(move);
@@ -242,6 +264,13 @@ class Searcher {
     }
 
     return alpha;
+  }
+
+  int _captureGain(Move move) {
+    int gain = Evaluator.pieceValues[Piece.type(board.position[move.to])]; // empty square = type 0 = 0
+    if (move.enPassantCapture) gain = _pawnValue; // target square is empty, but a pawn is taken
+    if (move.isPromotion) gain += Evaluator.pieceValues[move.promotingPiece()] - _pawnValue;
+    return gain;
   }
 
   bool isMate(int score) => score.abs() > (mateScore.abs() - 1000);
