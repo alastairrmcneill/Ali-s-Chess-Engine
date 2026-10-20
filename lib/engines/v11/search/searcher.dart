@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:ace/engines/engine_interface.dart';
 import 'package:ace/engines/v11/core/board.dart';
 import 'package:ace/engines/v11/core/move.dart';
@@ -26,6 +28,8 @@ class Searcher {
   final Stopwatch _stopwatch = Stopwatch();
   Duration? _timeLimit;
 
+  final List<Int32List> _plyScores = List.generate(256, (_) => Int32List(256));
+
   Move? getBestMove(
     Board board, {
     int? depth,
@@ -41,6 +45,7 @@ class Searcher {
       ..start();
 
     int maxDepth = depth ?? 256;
+
     bestEval = -999999999;
     bestMove = null;
 
@@ -150,12 +155,16 @@ class Searcher {
     // Checked after mate/stalemate, since a mate on the 100th half move still wins.
     if (board.fiftyMoveRule >= 100) return drawScore; // Fifty-move rule draw
 
-    final orderedMoves = moveOrdering.orderMoves(board, legalMoves, ttMove: ttMove);
+    Int32List scores = _plyScores[plyFromRoot];
+    moveOrdering.scoreMoves(board, legalMoves, scores, ttMove: ttMove);
     Move? bestMoveHere;
-    for (int i = 0; i < orderedMoves.length; i++) {
-      board.makeMove(orderedMoves[i]);
+
+    for (int i = 0; i < legalMoves.length; i++) {
+      moveOrdering.pickBest(legalMoves, scores, i);
+      Move move = legalMoves[i];
+      board.makeMove(move);
       final eval = -search(depth - 1, plyFromRoot + 1, -beta, -alpha);
-      board.unMakeMove(orderedMoves[i]);
+      board.unMakeMove(move);
 
       if (aborted) return 0;
 
@@ -163,13 +172,13 @@ class Searcher {
         // Move is too good, prune the rest of the branch
         stats.betaCutoffs++;
         if (i == 0) stats.firstMoveCutoffs++;
-        tt.store(board.zobristKey, toTT(beta, plyFromRoot), orderedMoves[i], depth, TranspositionTable.lower);
+        tt.store(board.zobristKey, toTT(beta, plyFromRoot), move, depth, TranspositionTable.lower);
         return beta;
       }
 
       if (eval > alpha) {
         alpha = eval;
-        bestMoveHere = orderedMoves[i];
+        bestMoveHere = move;
       }
     }
     final flag = alpha > originalAlpha ? TranspositionTable.exact : TranspositionTable.upper;
@@ -190,6 +199,7 @@ class Searcher {
     final inCheck = moveGenerator.isInCheck(board);
     if (inCheck) stats.qCheckNodes++;
 
+    // TODO: moves = moveGenerator.generateLegalMoves(board);
     if (inCheck && qDepth < qCheckDepthLimit) {
       // Can't stand pat in check, every legal reply has to be considered.
       moves = moveGenerator.generateLegalMoves(board);
@@ -197,6 +207,8 @@ class Searcher {
     } else {
       // Too deep to search every evasion, but still notice checkmate.
       if (inCheck && moveGenerator.generateLegalMoves(board).isEmpty) return mateScore + plyFromRoot;
+      // TODO: moves = moveGenerator.generateLegalMoves(board);
+      // TODO: if (inCheck && moves.isEmpty) return mateScore + plyFromRoot;
 
       stats.evaluations++;
       final standPat = evaluator.evaluate(board);
@@ -206,11 +218,15 @@ class Searcher {
       }
       alpha = standPat > alpha ? standPat : alpha;
       moves = moveGenerator.generateLegalMoves(board, includeQuietMoves: false);
+      // TODO: moves = moves.where((m) => (board.position[m.to] != Piece.none || m.enPassantCapture)).toList();
     }
 
-    final orderedMoves = moveOrdering.orderMoves(board, moves);
+    Int32List scores = _plyScores[plyFromRoot];
+    moveOrdering.scoreMoves(board, moves, scores);
 
-    for (final move in orderedMoves) {
+    for (int i = 0; i < moves.length; i++) {
+      moveOrdering.pickBest(moves, scores, i);
+      final move = moves[i];
       board.makeMove(move);
       final eval = -quiescenceSearch(-beta, -alpha, plyFromRoot + 1, qDepth + 1);
       board.unMakeMove(move);
