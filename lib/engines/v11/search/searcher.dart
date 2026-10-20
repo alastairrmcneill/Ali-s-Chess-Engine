@@ -213,8 +213,11 @@ class Searcher {
       if (moves.isEmpty) return mateScore + plyFromRoot;
     } else {
       // Too deep to search every evasion, but still notice checkmate.
-      if (inCheck && moveGenerator.generateLegalMoves(board).isEmpty) return mateScore + plyFromRoot;
-
+      List<Move>? evasions;
+      if (inCheck) {
+        evasions = moveGenerator.generateLegalMoves(board);
+        if (evasions.isEmpty) return mateScore + plyFromRoot;
+      }
       stats.evaluations++;
       standPat = evaluator.evaluate(board);
       final phase = evaluator.calculatePhase();
@@ -233,7 +236,7 @@ class Searcher {
       }
 
       alpha = standPat > alpha ? standPat : alpha;
-      moves = moveGenerator.generateLegalMoves(board, includeQuietMoves: false);
+      moves = inCheck ? _capturesOnly(evasions!) : moveGenerator.generateLegalMoves(board, includeQuietMoves: false);
     }
 
     Int32List scores = _plyScores[plyFromRoot];
@@ -271,6 +274,12 @@ class Searcher {
     if (move.enPassantCapture) gain = _pawnValue; // target square is empty, but a pawn is taken
     if (move.isPromotion) gain += Evaluator.pieceValues[move.promotingPiece()] - _pawnValue;
     return gain;
+  }
+
+  List<Move> _capturesOnly(List<Move> moves) {
+    return moves
+        .where((move) => board.position[move.to] != Piece.none || move.promotion != 0 || move.enPassantCapture)
+        .toList();
   }
 
   bool isMate(int score) => score.abs() > (mateScore.abs() - 1000);

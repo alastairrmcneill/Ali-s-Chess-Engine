@@ -71,6 +71,8 @@ class MoveGenerator {
     // Find where opponent attacks
     generateOpponentAttackData();
 
+    if (inCheck) generateQuietMoves = true; // evasions can be quiet
+
     // Check king moves including checks or checkmates
     generateKingMoves();
 
