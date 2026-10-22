@@ -60,16 +60,10 @@ class Zobrist {
     }
 
     // Castling
-    int castlingIndex = 0;
-    if (board.whiteCastleKingSide) castlingIndex |= 8;
-    if (board.whiteCastleQueenSide) castlingIndex |= 4;
-    if (board.blackCastleKingSide) castlingIndex |= 2;
-    if (board.blackCastleQueenSide) castlingIndex |= 1;
-
-    zobristkey ^= castlingRights[castlingIndex];
+    zobristkey ^= castlingRights[board.castling];
 
     // En Passant
-    zobristkey ^= enPassantSquares[board.enPassantSquare + 1];
+    zobristkey ^= enPassantSquares[board.epSquare + 1];
 
     // Side to move
     if (!board.whiteToPlay) zobristkey ^= sideToMove;

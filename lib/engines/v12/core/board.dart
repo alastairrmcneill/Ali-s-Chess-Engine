@@ -1,23 +1,14 @@
-import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:ace/chess_core/notation/fen.dart';
+import 'package:ace/engines/v12/core/attack_tables.dart';
 import 'package:ace/engines/v12/core/bitboard.dart';
-import 'package:ace/engines/v12/core/game_state.dart';
 import 'package:ace/engines/v12/core/move.dart';
 import 'package:ace/engines/v12/core/piece.dart';
 import 'package:ace/engines/v12/core/zobrist.dart';
 
 class Board {
   bool whiteToPlay = true;
-  int enPassantSquare = -1;
-  bool whiteCastleKingSide = false;
-  bool whiteCastleQueenSide = false;
-  bool blackCastleKingSide = false;
-  bool blackCastleQueenSide = false;
-  List<GameState> gameStateHistory = [];
-  int fiftyMoveRule = 0;
-  HashMap<int, int> hashHistory = HashMap();
   int plyCount = 0;
   int zobristKey = 0;
   final Uint64List pieceBB = Uint64List(16); // indexed by piece code (e.g. Piece.whiteKnight)
@@ -32,6 +23,7 @@ class Board {
   final Int32List undoCastling = Int32List(2048);
   final Int32List undoEp = Int32List(2048);
   final Int32List undoHalfMove = Int32List(2048);
+  static final Int32List _castleMask = AttackTables().castleMask;
 
   Board() : this.fromFEN(FenPosition.startingPosition);
 
@@ -43,32 +35,20 @@ class Board {
       if (piece != 0) _put(piece, i);
     }
     whiteToPlay = fenPosition.whiteToMove;
-    enPassantSquare = fenPosition.enPassantSquare;
-    whiteCastleKingSide = fenPosition.whiteCastleKingSide;
-    whiteCastleQueenSide = fenPosition.whiteCastleQueenSide;
-    blackCastleKingSide = fenPosition.blackCastleKingSide;
-    blackCastleQueenSide = fenPosition.blackCastleQueenSide;
 
-    castling = castlingRightsAsInt();
-    epSquare = enPassantSquare;
+    castling |= fenPosition.whiteCastleKingSide ? 8 : 0;
+    castling |= fenPosition.whiteCastleQueenSide ? 4 : 0;
+    castling |= fenPosition.blackCastleKingSide ? 2 : 0;
+    castling |= fenPosition.blackCastleQueenSide ? 1 : 0;
+
+    epSquare = fenPosition.enPassantSquare;
     halfMove = fenPosition.halfmoveClock;
 
     zobristKey = Zobrist.getZobristForBoard(this);
-    gameStateHistory = [];
-    fiftyMoveRule = fenPosition.halfmoveClock;
     plyCount = (fenPosition.fullmoveNumber - 1) * 2 + (whiteToPlay ? 0 : 1);
-    addMoveToHashHistory(zobristKey); // The starting position counts as seen once
   }
 
   makeMove(Move move) {
-    // Set up current game state
-    GameState gameState = GameState();
-    gameState.whiteCastleKingSide = whiteCastleKingSide;
-    gameState.whiteCastleQueenSide = whiteCastleQueenSide;
-    gameState.blackCastleKingSide = blackCastleKingSide;
-    gameState.blackCastleQueenSide = blackCastleQueenSide;
-    gameState.zobristKey = zobristKey;
-
     // Who is moving to where
     int selectedPiece = squares[move.from];
     int capturedPiece = squares[move.to];
@@ -76,27 +56,21 @@ class Board {
 
     // Save current state
     undoCaptured[plyCount] = capturedPiece;
-    undoCastling[plyCount] = castlingRightsAsInt();
-    undoEp[plyCount] = enPassantSquare;
+    undoCastling[plyCount] = castling;
+    undoEp[plyCount] = epSquare;
     undoHalfMove[plyCount] = halfMove;
     keyStack[plyCount] = zobristKey;
 
-    gameState.enPassantSquare = enPassantSquare;
-    gameState.capturedPiece = capturedPiece;
-    int startingCastlingIndex = castlingRightsAsInt();
-
     // Handle En passant file
-    zobristKey ^= Zobrist.enPassantSquares[enPassantSquare + 1]; // Remove old enpassant square
+    zobristKey ^= Zobrist.enPassantSquares[epSquare + 1]; // Remove old enpassant square
     if (move.pawnTwoForward) {
       int direction = whiteToPlay ? -8 : 8;
-      enPassantSquare = move.to - direction;
+      epSquare = move.to - direction;
     } else {
-      enPassantSquare = -1;
+      epSquare = -1;
     }
 
-    zobristKey ^= Zobrist.enPassantSquares[enPassantSquare + 1]; // Add new en passant square
-
-    // Handle promotion
+    zobristKey ^= Zobrist.enPassantSquares[epSquare + 1]; // Add new en passant square
 
     // Handle captures
     if (move.enPassantCapture) {
@@ -104,7 +78,6 @@ class Board {
       capturedPiece = squares[capturedSq];
 
       undoCaptured[plyCount] = capturedPiece;
-      gameState.capturedPiece = capturedPiece;
       _remove(capturedPiece, capturedSq);
     } else if (capturedPiece != Piece.none) {
       _remove(capturedPiece, move.to);
@@ -117,64 +90,14 @@ class Board {
       int rookTargetIndex = move.to % 8 == 2 ? castlingRank * 8 + 3 : castlingRank * 8 + 5;
 
       _move(Piece.rook | color, rookStartingIndex, rookTargetIndex);
+    }
+    int newCastling = castling & _castleMask[move.from] & _castleMask[move.to];
 
-      switch (castlingRank) {
-        case 0:
-          blackCastleQueenSide = false;
-          blackCastleKingSide = false;
-          break;
-        case 7:
-          whiteCastleKingSide = false;
-          whiteCastleQueenSide = false;
-          break;
-        default:
-          break;
-      }
-    } else if (Piece.type(selectedPiece) == Piece.king) {
-      if (whiteToPlay) {
-        whiteCastleKingSide = false;
-        whiteCastleQueenSide = false;
-      } else {
-        blackCastleKingSide = false;
-        blackCastleQueenSide = false;
-      }
-    } else if (Piece.type(selectedPiece) == Piece.rook) {
-      if (whiteToPlay) {
-        if (move.from == 56) {
-          whiteCastleQueenSide = false;
-        } else if (move.from == 63) {
-          whiteCastleKingSide = false;
-        }
-      } else {
-        if (move.from == 0) {
-          blackCastleQueenSide = false;
-        } else if (move.from == 7) {
-          blackCastleKingSide = false;
-        }
-      }
+    if (newCastling != castling) {
+      zobristKey ^= Zobrist.castlingRights[castling];
+      zobristKey ^= Zobrist.castlingRights[newCastling];
+      castling = newCastling;
     }
-    if (Piece.type(capturedPiece) == Piece.rook) {
-      if (Piece.isColor(capturedPiece, Piece.white)) {
-        if (move.to == 56) {
-          whiteCastleQueenSide = false;
-        } else if (move.to == 63) {
-          whiteCastleKingSide = false;
-        }
-      } else {
-        if (move.to == 0) {
-          blackCastleQueenSide = false;
-        } else if (move.to == 7) {
-          blackCastleKingSide = false;
-        }
-      }
-    }
-
-    int endingCastlingIndex = castlingRightsAsInt();
-    if (startingCastlingIndex != endingCastlingIndex) {
-      zobristKey ^= Zobrist.castlingRights[startingCastlingIndex];
-      zobristKey ^= Zobrist.castlingRights[endingCastlingIndex];
-    }
-    // End of castling
 
     // Update positions
     if (move.promotion != 0) {
@@ -189,27 +112,22 @@ class Board {
     whiteToPlay = !whiteToPlay;
     zobristKey ^= Zobrist.sideToMove;
 
-    gameState.fiftyMoveRule = fiftyMoveRule;
-    fiftyMoveRule++;
     plyCount++;
     halfMove++;
-    if (Piece.type(selectedPiece) == Piece.pawn || Piece.type(capturedPiece) != Piece.none) {
-      fiftyMoveRule = 0;
+    if (move.promotion != 0 || Piece.type(selectedPiece) == Piece.pawn || Piece.type(capturedPiece) != Piece.none) {
       halfMove = 0;
     }
-
-    gameStateHistory.add(gameState);
-    addMoveToHashHistory(zobristKey);
   }
 
   unMakeMove(Move move) {
-    removeMoveFromHashHistory();
     plyCount--;
     halfMove = undoHalfMove[plyCount];
+    castling = undoCastling[plyCount];
+    epSquare = undoEp[plyCount];
 
     int selectedPiece = squares[move.to]; // The piece at the end square of the move we are undo
     int color = whiteToPlay ? Piece.black : Piece.white; // The last move was the opposite of the current state
-    int capturedPiece = gameStateHistory.last.capturedPiece;
+    int capturedPiece = undoCaptured[plyCount];
 
     // Handle promotion
     if (move.promotion != 0) {
@@ -225,58 +143,6 @@ class Board {
       int rookTargetIndex = move.to % 8 == 2 ? castlingRank * 8 + 3 : castlingRank * 8 + 5;
 
       _move(Piece.rook | color, rookTargetIndex, rookStartingIndex);
-
-      switch (castlingRank) {
-        case 0:
-          blackCastleQueenSide = gameStateHistory.last.blackCastleQueenSide;
-          blackCastleKingSide = gameStateHistory.last.blackCastleKingSide;
-          break;
-        case 7:
-          whiteCastleKingSide = gameStateHistory.last.whiteCastleKingSide;
-          whiteCastleQueenSide = gameStateHistory.last.whiteCastleQueenSide;
-          break;
-        default:
-          break;
-      }
-    } else if (Piece.type(selectedPiece) == Piece.king) {
-      if (whiteToPlay) {
-        // Opposite for undoing
-        blackCastleQueenSide = gameStateHistory.last.blackCastleQueenSide;
-        blackCastleKingSide = gameStateHistory.last.blackCastleKingSide;
-      } else {
-        whiteCastleKingSide = gameStateHistory.last.whiteCastleKingSide;
-        whiteCastleQueenSide = gameStateHistory.last.whiteCastleQueenSide;
-      }
-    } else if (Piece.type(selectedPiece) == Piece.rook) {
-      if (!whiteToPlay) {
-        // Opposite because of previous go
-        if (move.from == 56) {
-          whiteCastleQueenSide = gameStateHistory.last.whiteCastleQueenSide;
-        } else if (move.from == 63) {
-          whiteCastleKingSide = gameStateHistory.last.whiteCastleKingSide;
-        }
-      } else {
-        if (move.from == 0) {
-          blackCastleQueenSide = gameStateHistory.last.blackCastleQueenSide;
-        } else if (move.from == 7) {
-          blackCastleKingSide = gameStateHistory.last.blackCastleKingSide;
-        }
-      }
-    }
-    if (Piece.type(capturedPiece) == Piece.rook) {
-      if (Piece.isColor(capturedPiece, Piece.white)) {
-        if (move.to == 56) {
-          whiteCastleQueenSide = gameStateHistory.last.whiteCastleQueenSide;
-        } else if (move.to == 63) {
-          whiteCastleKingSide = gameStateHistory.last.whiteCastleKingSide;
-        }
-      } else {
-        if (move.to == 0) {
-          blackCastleQueenSide = gameStateHistory.last.blackCastleQueenSide;
-        } else if (move.to == 7) {
-          blackCastleKingSide = gameStateHistory.last.blackCastleKingSide;
-        }
-      }
     }
 
     // Handle en passant captures
@@ -286,35 +152,11 @@ class Board {
       capturedPiece = Piece.none;
     }
 
-    enPassantSquare = gameStateHistory.last.enPassantSquare;
-
-    fiftyMoveRule = gameStateHistory.last.fiftyMoveRule;
-
-    gameStateHistory.removeLast();
-
     if (move.promotion == 0) _move(selectedPiece, move.to, move.from);
     if (capturedPiece != Piece.none) _put(capturedPiece, move.to);
     zobristKey = keyStack[plyCount];
 
     whiteToPlay = !whiteToPlay;
-  }
-
-  int castlingRightsAsInt() {
-    int castlingIndex = 0;
-    if (whiteCastleKingSide) castlingIndex |= 8;
-    if (whiteCastleQueenSide) castlingIndex |= 4;
-    if (blackCastleKingSide) castlingIndex |= 2;
-    if (blackCastleQueenSide) castlingIndex |= 1;
-    return castlingIndex;
-  }
-
-  void addMoveToHashHistory(int zobristHash) {
-    hashHistory.update(zobristHash, (count) => count + 1, ifAbsent: () => 1);
-  }
-
-  void removeMoveFromHashHistory() {
-    // Since the move is undone, decrement the count in the hash history.
-    hashHistory.update(zobristKey, (count) => count - 1);
   }
 
   @pragma('vm:prefer-inline')

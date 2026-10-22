@@ -365,8 +365,8 @@ class _Snapshot {
         colourBB = Uint64List.fromList(b.colourBB),
         zobristKey = b.zobristKey,
         whiteToPlay = b.whiteToPlay,
-        enPassantSquare = b.enPassantSquare,
-        castling = b.castlingRightsAsInt(),
+        enPassantSquare = b.epSquare,
+        castling = b.castling,
         halfMove = b.halfMove,
         plyCount = b.plyCount;
 
@@ -384,8 +384,8 @@ class _Snapshot {
     }
     if (zobristKey != b.zobristKey) out.add('zobristKey ${_hex(zobristKey)} -> ${_hex(b.zobristKey)}');
     if (whiteToPlay != b.whiteToPlay) out.add('whiteToPlay $whiteToPlay -> ${b.whiteToPlay}');
-    if (enPassantSquare != b.enPassantSquare) out.add('enPassantSquare $enPassantSquare -> ${b.enPassantSquare}');
-    if (castling != b.castlingRightsAsInt()) out.add('castling $castling -> ${b.castlingRightsAsInt()}');
+    if (enPassantSquare != b.epSquare) out.add('enPassantSquare $enPassantSquare -> ${b.epSquare}');
+    if (castling != b.castling) out.add('castling $castling -> ${b.castling}');
     if (halfMove != b.halfMove) out.add('halfMove $halfMove -> ${b.halfMove}');
     if (plyCount != b.plyCount) out.add('plyCount $plyCount -> ${b.plyCount}');
     return out;
@@ -604,9 +604,8 @@ class _BoardTabState extends State<_BoardTab> {
     int mismatch = 0;
     final invariantErrors = _invariants(b, mismatch: (m) => mismatch = m);
     final overlay = _overlayBits();
-    final legalTargets = _selected == -1
-        ? 0
-        : _legal.where((m) => m.from == _selected).fold<int>(0, (acc, m) => acc | (1 << m.to));
+    final legalTargets =
+        _selected == -1 ? 0 : _legal.where((m) => m.from == _selected).fold<int>(0, (acc, m) => acc | (1 << m.to));
 
     final mono = theme.textTheme.bodySmall?.copyWith(fontFamily: 'monospace');
     final ok = invariantErrors.isEmpty && _error == null;
@@ -663,7 +662,8 @@ class _BoardTabState extends State<_BoardTab> {
                         const DropdownMenuItem(value: _overlayOccupied, child: Text('occupied (white | black)')),
                         const DropdownMenuItem(value: _overlayWhite, child: Text('colourBB[0] white')),
                         const DropdownMenuItem(value: _overlayBlack, child: Text('colourBB[1] black')),
-                        for (final p in Piece.pieceList) DropdownMenuItem(value: p, child: Text('pieceBB[$p] ${_name(p)}')),
+                        for (final p in Piece.pieceList)
+                          DropdownMenuItem(value: p, child: Text('pieceBB[$p] ${_name(p)}')),
                       ],
                       onChanged: (v) => setState(() => _overlay = v ?? _overlayNone),
                     ),
@@ -689,8 +689,8 @@ class _BoardTabState extends State<_BoardTab> {
               const SizedBox(height: 8),
               Text('${b.whiteToPlay ? 'White' : 'Black'} to move, ${_legal.length} legal moves', style: mono),
               Text(
-                'plyCount ${b.plyCount}  halfMove ${b.halfMove}  castling ${b.castlingRightsAsInt().toRadixString(2).padLeft(4, '0')}'
-                '  ep ${b.enPassantSquare == -1 ? '-' : BoardHelper.squareName(b.enPassantSquare)}',
+                'plyCount ${b.plyCount}  halfMove ${b.halfMove}  castling ${b.castling.toRadixString(2).padLeft(4, '0')}'
+                '  ep ${b.epSquare == -1 ? '-' : BoardHelper.squareName(b.epSquare)}',
                 style: mono,
               ),
               SelectableText('zobristKey ${_hex(b.zobristKey)}', style: mono),

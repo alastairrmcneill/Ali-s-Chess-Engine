@@ -541,9 +541,9 @@ class MoveGenerator {
               targetSquare: targetIndex,
             ));
           }
-        } else if (targetIndex == board.enPassantSquare) {
+        } else if (targetIndex == board.epSquare) {
           // If we are in check after en passant then skip
-          if (inCheckAfterEnPassant(startingIndex, targetIndex, board.enPassantSquare - direction)) continue;
+          if (inCheckAfterEnPassant(startingIndex, targetIndex, board.epSquare - direction)) continue;
 
           moves.add(Move(
             startingSquare: startingIndex,
@@ -623,11 +623,11 @@ class MoveGenerator {
   }
 
   bool canCastleQueenSide() {
-    return board.whiteToPlay ? board.whiteCastleQueenSide : board.blackCastleQueenSide;
+    return board.castling & (board.whiteToPlay ? 4 : 1) != 0;
   }
 
   bool canCastleKingSide() {
-    return board.whiteToPlay ? board.whiteCastleKingSide : board.blackCastleKingSide;
+    return board.castling & (board.whiteToPlay ? 8 : 2) != 0;
   }
 
   bool isMovingAlongRay(int rayDir, int startingIndex, int targetIndex) {

@@ -158,7 +158,7 @@ class Searcher {
     }
 
     // Checked after mate/stalemate, since a mate on the 100th half move still wins.
-    if (board.fiftyMoveRule >= 100) return drawScore; // Fifty-move rule draw
+    if (board.halfMove >= 100) return drawScore; // Fifty-move rule draw
 
     Int32List scores = _plyScores[plyFromRoot];
     moveOrdering.scoreMoves(board, legalMoves, scores, ttMove: ttMove);
