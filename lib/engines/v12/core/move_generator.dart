@@ -92,12 +92,11 @@ class MoveGenerator {
   bool isInCheck(Board board) {
     final friendly = board.whiteToPlay ? Piece.white : Piece.black;
     final opponent = board.whiteToPlay ? Piece.black : Piece.white;
-    final king =
-        board.position.indexWhere((piece) => Piece.type(piece) == Piece.king && Piece.isColor(piece, friendly));
+    final king = board.squares.indexWhere((piece) => Piece.type(piece) == Piece.king && Piece.isColor(piece, friendly));
 
     // Knights
     for (final square in precomputeData.knightMoves[king]) {
-      final piece = board.position[square];
+      final piece = board.squares[square];
       if (Piece.type(piece) == Piece.knight && Piece.isColor(piece, opponent)) {
         return true;
       }
@@ -106,7 +105,7 @@ class MoveGenerator {
     // Pawn
     final pawnMoves = board.whiteToPlay ? precomputeData.whitePawnCaptures : precomputeData.blackPawnCaptures;
     for (final square in pawnMoves[king]) {
-      final piece = board.position[square];
+      final piece = board.squares[square];
       if (Piece.type(piece) == Piece.pawn && Piece.isColor(piece, opponent)) {
         return true;
       }
@@ -118,7 +117,7 @@ class MoveGenerator {
       final offset = precomputeData.directionOffsets[dir];
 
       for (int n = 1; n <= precomputeData.numSquaresToEdge[king][dir]; n++) {
-        final piece = board.position[king + n * offset];
+        final piece = board.squares[king + n * offset];
         if (piece == Piece.none) continue;
         if (Piece.isColor(piece, opponent) &&
             (isDiagonal
@@ -133,8 +132,8 @@ class MoveGenerator {
   }
 
   void findPieces() {
-    for (var index = 0; index < board.position.length; index++) {
-      int piece = board.position[index];
+    for (var index = 0; index < board.squares.length; index++) {
+      int piece = board.squares[index];
       int pieceType = Piece.type(piece);
       switch (pieceType) {
         case Piece.king:
@@ -197,7 +196,7 @@ class MoveGenerator {
       // Starting from the king square, loop to the edge of the board
       for (int n = 1; n <= precomputeData.numSquaresToEdge[friendlyKingIndex][dir]; n++) {
         int targetIndex = friendlyKingIndex + (n * currentDirectionOffset);
-        int piece = board.position[targetIndex];
+        int piece = board.squares[targetIndex];
         rayMask.add(targetIndex);
 
         // Skip if the square is empty
@@ -297,7 +296,7 @@ class MoveGenerator {
         opponentAttackMap.add(targetIndex);
 
         if (targetIndex != friendlyKingIndex) {
-          if (board.position[targetIndex] != Piece.none) break;
+          if (board.squares[targetIndex] != Piece.none) break;
         }
       }
     }
@@ -307,7 +306,7 @@ class MoveGenerator {
     int startingIndex = friendlyKingIndex;
 
     for (int targetIndex in precomputeData.kingMoves[startingIndex]) {
-      int pieceOnTargetIndex = board.position[targetIndex];
+      int pieceOnTargetIndex = board.squares[targetIndex];
 
       // Skip over everything if its a friendly piece on that square
       if (Piece.isColor(pieceOnTargetIndex, friendlyColor)) continue;
@@ -338,8 +337,8 @@ class MoveGenerator {
           canCastleQueenSide()) {
         int castleQueenSideIndex = targetIndex - 1;
         // Check all the squares are empty
-        if (board.position[castleQueenSideIndex] == Piece.none &&
-            board.position[castleQueenSideIndex - 1] == Piece.none) {
+        if (board.squares[castleQueenSideIndex] == Piece.none &&
+            board.squares[castleQueenSideIndex - 1] == Piece.none) {
           if (!opponentAttackMap.contains(castleQueenSideIndex)) {
             // Check the final square isn't under attack
             moves.add(
@@ -360,7 +359,7 @@ class MoveGenerator {
         // Try castling right
         int castleKingSideIndex = targetIndex + 1;
 
-        if (board.position[targetIndex] == Piece.none && board.position[castleKingSideIndex] == Piece.none) {
+        if (board.squares[targetIndex] == Piece.none && board.squares[castleKingSideIndex] == Piece.none) {
           if (!opponentAttackMap.contains(castleKingSideIndex)) {
             moves.add(
               Move(
@@ -413,7 +412,7 @@ class MoveGenerator {
       // Find the number of squares in that direction and loop through them
       for (int n = 1; n <= precomputeData.numSquaresToEdge[startingIndex][dir]; n++) {
         int targetIndex = startingIndex + (n * currentDirectionOffset);
-        int targetPiece = board.position[targetIndex];
+        int targetPiece = board.squares[targetIndex];
 
         if (Piece.isColor(targetPiece, friendlyColor)) break; // Stop searching if you hit friendly peice
 
@@ -443,7 +442,7 @@ class MoveGenerator {
       if (pinnedRayIndexes.contains(startingIndex)) continue;
 
       for (int targetIndex in precomputeData.knightMoves[startingIndex]) {
-        int targetPiece = board.position[targetIndex];
+        int targetPiece = board.squares[targetIndex];
         bool isCapture = Piece.isColor(targetPiece, opponentColor);
 
         // For the quiescence search only add moves if its a capture unless we are doing a full search then add all moves
@@ -471,7 +470,7 @@ class MoveGenerator {
 
     for (int startingIndex in friendlyPawnIndexes) {
       int targetIndex = startingIndex + direction;
-      int targetPiece = board.position[targetIndex];
+      int targetPiece = board.squares[targetIndex];
       int startingRank = BoardHelper.getRankFromIndex(startingIndex);
       bool oneStepFromPromotion = startingRank == finalRankBeforePromotion;
 
@@ -497,7 +496,7 @@ class MoveGenerator {
             // Check if pawn can move forwards 2 squares
             if (startingRank == beginningRank) {
               targetIndex = startingIndex + direction * 2;
-              targetPiece = board.position[targetIndex];
+              targetPiece = board.squares[targetIndex];
 
               if (targetPiece == Piece.none) {
                 // Make sure we aren't in check and if we are that this move intercepts
@@ -530,7 +529,7 @@ class MoveGenerator {
             !isMovingAlongRay(direction + directionOffset, startingIndex, friendlyKingIndex)) continue;
 
         // If its possible for this pawn to attack the target square
-        if (Piece.isColor(board.position[targetIndex], opponentColor)) {
+        if (Piece.isColor(board.squares[targetIndex], opponentColor)) {
           // If we are in check and this move doesn't intercept it then skip
           if (inCheck && !checkedRayIndexes.contains(targetIndex)) continue;
 
@@ -582,9 +581,9 @@ class MoveGenerator {
 
   bool inCheckAfterEnPassant(int startingIndex, int targetIndex, int enPassantCaptureIndex) {
     // Simulate playing
-    board.position[targetIndex] = board.position[startingIndex];
-    board.position[startingIndex] = Piece.none;
-    board.position[enPassantCaptureIndex] = Piece.none;
+    board.squares[targetIndex] = board.squares[startingIndex];
+    board.squares[startingIndex] = Piece.none;
+    board.squares[enPassantCaptureIndex] = Piece.none;
 
     // Check if in check
     bool isInCheckAfterEnPassant = false;
@@ -594,7 +593,7 @@ class MoveGenerator {
 
     for (int n = 1; n <= precomputeData.numSquaresToEdge[friendlyKingIndex][dir]; n++) {
       int index = friendlyKingIndex + (n * currentDirectionOffset);
-      int piece = board.position[index];
+      int piece = board.squares[index];
 
       // Skip if square is empty
       if (piece == Piece.none) continue;
@@ -616,9 +615,9 @@ class MoveGenerator {
     }
 
     // undo playing
-    board.position[targetIndex] = Piece.none;
-    board.position[startingIndex] = Piece.pawn | friendlyColor;
-    board.position[enPassantCaptureIndex] = Piece.pawn | opponentColor;
+    board.squares[targetIndex] = Piece.none;
+    board.squares[startingIndex] = Piece.pawn | friendlyColor;
+    board.squares[enPassantCaptureIndex] = Piece.pawn | opponentColor;
 
     return isInCheckAfterEnPassant;
   }

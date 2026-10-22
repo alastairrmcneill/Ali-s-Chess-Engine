@@ -58,7 +58,7 @@ class Zobrist {
 
     // Pieces
     for (int index = 0; index < 64; index++) {
-      int piece = board.position[index];
+      int piece = board.squares[index];
       zobristkey ^= piecesArray[piece][index];
     }
 

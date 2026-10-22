@@ -270,7 +270,7 @@ class Searcher {
   }
 
   int _captureGain(Move move) {
-    int gain = Evaluator.pieceValues[Piece.type(board.position[move.to])]; // empty square = type 0 = 0
+    int gain = Evaluator.pieceValues[Piece.type(board.squares[move.to])]; // empty square = type 0 = 0
     if (move.enPassantCapture) gain = _pawnValue; // target square is empty, but a pawn is taken
     if (move.isPromotion) gain += Evaluator.pieceValues[move.promotingPiece()] - _pawnValue;
     return gain;
@@ -278,7 +278,7 @@ class Searcher {
 
   List<Move> _capturesOnly(List<Move> moves) {
     return moves
-        .where((move) => board.position[move.to] != Piece.none || move.promotion != 0 || move.enPassantCapture)
+        .where((move) => board.squares[move.to] != Piece.none || move.promotion != 0 || move.enPassantCapture)
         .toList();
   }
 

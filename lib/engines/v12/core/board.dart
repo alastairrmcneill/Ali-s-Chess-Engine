@@ -1,4 +1,5 @@
 import 'dart:collection';
+import 'dart:typed_data';
 
 import 'package:ace/chess_core/notation/fen.dart';
 import 'package:ace/engines/v12/core/game_state.dart';
@@ -7,31 +8,49 @@ import 'package:ace/engines/v12/core/piece.dart';
 import 'package:ace/engines/v12/core/zobrist.dart';
 
 class Board {
-  late List<int> position;
-  late bool whiteToPlay;
-  late int enPassantSquare;
-  late bool whiteCastleKingSide;
-  late bool whiteCastleQueenSide;
-  late bool blackCastleKingSide;
-  late bool blackCastleQueenSide;
-  late List<GameState> gameStateHistory;
-  late int fiftyMoveRule;
-  late HashMap<int, int> hashHistory = HashMap();
-  late int plyCount;
-  late int zobristKey;
+  bool whiteToPlay = true;
+  int enPassantSquare = -1;
+  bool whiteCastleKingSide = false;
+  bool whiteCastleQueenSide = false;
+  bool blackCastleKingSide = false;
+  bool blackCastleQueenSide = false;
+  List<GameState> gameStateHistory = [];
+  int fiftyMoveRule = 0;
+  HashMap<int, int> hashHistory = HashMap();
+  int plyCount = 0;
+  int zobristKey = 0;
+  final Uint64List pieceBB = Uint64List(16); // indexed by piece code (e.g. Piece.whiteKnight)
+  final Uint64List colourBB = Uint64List(2); // 0 white, 1 black
+  final Uint8List squares = Uint8List(64); // mailbox, kept in sync for O(1) piece-on-square
+  int castling = 0;
+  int epSquare = -1 /* -1 none */;
+  int halfmove = 0;
+// Undo stack, preallocated (MAX_GAME_PLY = 2048: 300-move game + search depth + margin)
+  final Int64List keyStack = Int64List(2048);
+  final Int32List undoCaptured = Int32List(2048);
+  final Int32List undoCastling = Int32List(2048);
+  final Int32List undoEp = Int32List(2048);
+  final Int32List undoHalfmove = Int32List(2048);
 
   Board() : this.fromFEN(FenPosition.startingPosition);
 
   Board.fromFEN(String fen) {
     FenPosition fenPosition = FenPosition.parse(fen);
 
-    position = fenPosition.position;
+    for (int i = 0; i < 64; i++) {
+      int piece = fenPosition.position[i];
+      if (piece != 0) _put(piece, i);
+    }
     whiteToPlay = fenPosition.whiteToMove;
     enPassantSquare = fenPosition.enPassantSquare;
     whiteCastleKingSide = fenPosition.whiteCastleKingSide;
     whiteCastleQueenSide = fenPosition.whiteCastleQueenSide;
     blackCastleKingSide = fenPosition.blackCastleKingSide;
     blackCastleQueenSide = fenPosition.blackCastleQueenSide;
+
+    castling = castlingRightsAsInt();
+    epSquare = enPassantSquare;
+    halfmove = fenPosition.halfmoveClock;
 
     zobristKey = Zobrist.getZobristForBoard(this);
     gameStateHistory = [];
@@ -50,8 +69,8 @@ class Board {
     gameState.zobristKey = zobristKey;
 
     // Who is moving to where
-    int selectedPiece = position[move.from];
-    int capturedPiece = position[move.to];
+    int selectedPiece = squares[move.from];
+    int capturedPiece = squares[move.to];
     int color = whiteToPlay ? Piece.white : Piece.black;
 
     gameState.enPassantSquare = enPassantSquare;
@@ -82,10 +101,10 @@ class Board {
       int direction = whiteToPlay ? 8 : -8;
       int enPassantCaptureSquare = move.to + direction;
 
-      zobristKey ^= Zobrist.piecesArray[position[enPassantCaptureSquare]]
+      zobristKey ^= Zobrist.piecesArray[squares[enPassantCaptureSquare]]
           [enPassantCaptureSquare]; // Remove en passant capture square from zobrist
-      gameState.capturedPiece = position[enPassantCaptureSquare];
-      position[enPassantCaptureSquare] = 0;
+      gameState.capturedPiece = squares[enPassantCaptureSquare];
+      squares[enPassantCaptureSquare] = 0;
     }
 
     // Castling
@@ -94,10 +113,10 @@ class Board {
       int rookStartingIndex = move.to % 8 == 2 ? castlingRank * 8 + 0 : castlingRank * 8 + 7;
       int rookTargetIndex = move.to % 8 == 2 ? castlingRank * 8 + 3 : castlingRank * 8 + 5;
 
-      position[rookTargetIndex] = position[rookStartingIndex];
-      position[rookStartingIndex] = 0;
-      zobristKey ^= Zobrist.piecesArray[position[rookTargetIndex]][rookStartingIndex];
-      zobristKey ^= Zobrist.piecesArray[position[rookTargetIndex]][rookTargetIndex];
+      squares[rookTargetIndex] = squares[rookStartingIndex];
+      squares[rookStartingIndex] = 0;
+      zobristKey ^= Zobrist.piecesArray[squares[rookTargetIndex]][rookStartingIndex];
+      zobristKey ^= Zobrist.piecesArray[squares[rookTargetIndex]][rookTargetIndex];
 
       switch (castlingRank) {
         case 0:
@@ -158,8 +177,8 @@ class Board {
     // End of castling
 
     // Update positions
-    position[move.to] = selectedPiece;
-    position[move.from] = 0;
+    squares[move.to] = selectedPiece;
+    squares[move.from] = 0;
 
     zobristKey ^= Zobrist.piecesArray[capturedPiece][move.to]; // Remove piece from target square
     zobristKey ^= Zobrist.piecesArray[selectedPiece][move.to]; // Add starting piece to target square
@@ -179,7 +198,7 @@ class Board {
   }
 
   unMakeMove(Move move) {
-    int selectedPiece = position[move.to]; // The piece at the end square of the move we are undo
+    int selectedPiece = squares[move.to]; // The piece at the end square of the move we are undo
     int color = whiteToPlay ? Piece.black : Piece.white; // The last move was the opposite of the current state
     int capturedPiece = gameStateHistory.last.capturedPiece;
 
@@ -194,8 +213,8 @@ class Board {
       int rookStartingIndex = move.to % 8 == 2 ? castlingRank * 8 + 0 : castlingRank * 8 + 7;
       int rookTargetIndex = move.to % 8 == 2 ? castlingRank * 8 + 3 : castlingRank * 8 + 5;
 
-      position[rookStartingIndex] = position[rookTargetIndex];
-      position[rookTargetIndex] = 0;
+      squares[rookStartingIndex] = squares[rookTargetIndex];
+      squares[rookTargetIndex] = 0;
 
       switch (castlingRank) {
         case 0:
@@ -255,7 +274,7 @@ class Board {
       int direction = whiteToPlay ? -8 : 8; // The last move was the opposite of the current state
       int enPassantCaptureSquare = move.to + direction;
 
-      position[enPassantCaptureSquare] = capturedPiece;
+      squares[enPassantCaptureSquare] = capturedPiece;
       capturedPiece = 0;
       enPassantSquare = move.to;
     }
@@ -268,8 +287,8 @@ class Board {
     zobristKey = gameStateHistory.last.zobristKey;
     gameStateHistory.removeLast();
 
-    position[move.from] = selectedPiece;
-    position[move.to] = capturedPiece;
+    squares[move.from] = selectedPiece;
+    squares[move.to] = capturedPiece;
     whiteToPlay = !whiteToPlay;
   }
 
@@ -289,5 +308,44 @@ class Board {
   void removeMoveFromHashHistory() {
     // Since the move is undone, decrement the count in the hash history.
     hashHistory.update(zobristKey, (count) => count - 1);
+  }
+
+  @pragma('vm:prefer-inline')
+  void _put(int piece, int sq) {
+    squares[sq] = piece;
+    zobristKey ^= Zobrist.piecesArray[piece][sq];
+    pieceBB[piece] |= 1 << sq;
+    if (Piece.isColor(piece, Piece.white)) {
+      colourBB[0] |= 1 << sq;
+    } else {
+      colourBB[1] |= 1 << sq;
+    }
+  }
+
+  @pragma('vm:prefer-inline')
+  void _remove(int piece, int sq) {
+    squares[sq] = 0;
+    zobristKey ^= Zobrist.piecesArray[piece][sq];
+    pieceBB[piece] &= ~(1 << sq);
+
+    if (Piece.isColor(piece, Piece.white)) {
+      colourBB[0] &= ~(1 << sq);
+    } else {
+      colourBB[1] &= ~(1 << sq);
+    }
+  }
+
+  @pragma('vm:prefer-inline')
+  void _move(int piece, int from, int to) {
+    squares[from] = 0;
+    squares[to] = piece;
+    zobristKey ^= Zobrist.piecesArray[piece][from] ^ Zobrist.piecesArray[piece][to];
+    int mask = (1 << from) | (1 << to);
+    pieceBB[piece] ^= mask;
+    if (Piece.isColor(piece, Piece.white)) {
+      colourBB[0] ^= mask;
+    } else {
+      colourBB[1] ^= mask;
+    }
   }
 }

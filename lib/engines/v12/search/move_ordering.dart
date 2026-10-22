@@ -42,8 +42,8 @@ class MoveOrdering {
     score += move.promotingPiece() * 10;
 
     // Check for captures and favour pawns taking queens
-    int movingPiece = board.position[move.from];
-    int capturedPiece = board.position[move.to];
+    int movingPiece = board.squares[move.from];
+    int capturedPiece = board.squares[move.to];
 
     if (capturedPiece != Piece.none) {
       score += (pieceValues[Piece.type(capturedPiece)] * 10 - pieceValues[Piece.type(movingPiece)]);

@@ -58,8 +58,8 @@ class Evaluator {
     whiteKing = -1;
     blackKing = -1;
 
-    for (var i = 0; i < board.position.length; i++) {
-      final piece = board.position[i];
+    for (var i = 0; i < board.squares.length; i++) {
+      final piece = board.squares[i];
 
       if (piece == Piece.none) continue;
 
