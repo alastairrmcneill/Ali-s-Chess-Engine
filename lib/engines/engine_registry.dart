@@ -3,6 +3,7 @@ import 'package:ace/engines/v0/v0_engine.dart';
 import 'package:ace/engines/v1/v1_engine.dart';
 import 'package:ace/engines/v10/v10_engine.dart';
 import 'package:ace/engines/v11/v11_engine.dart';
+import 'package:ace/engines/v12/v12_engine.dart';
 import 'package:ace/engines/v2/v2_engine.dart';
 import 'package:ace/engines/v3/v3_engine.dart';
 import 'package:ace/engines/v4/v4_engine.dart';
@@ -27,6 +28,7 @@ class EngineRegistry {
     'v9': () => V9Engine(),
     'v10': () => V10Engine(),
     'v11': () => V11Engine(),
+    'v12': () => V12Engine(),
   };
 
   static List<String> get allIds => _versions.keys.toList();
