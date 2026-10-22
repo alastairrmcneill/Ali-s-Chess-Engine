@@ -2,6 +2,7 @@ import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:ace/chess_core/notation/fen.dart';
+import 'package:ace/engines/v12/core/bitboard.dart';
 import 'package:ace/engines/v12/core/game_state.dart';
 import 'package:ace/engines/v12/core/move.dart';
 import 'package:ace/engines/v12/core/piece.dart';
@@ -24,13 +25,13 @@ class Board {
   final Uint8List squares = Uint8List(64); // mailbox, kept in sync for O(1) piece-on-square
   int castling = 0;
   int epSquare = -1 /* -1 none */;
-  int halfmove = 0;
-// Undo stack, preallocated (MAX_GAME_PLY = 2048: 300-move game + search depth + margin)
+  int halfMove = 0;
+  // Undo stack, preallocated (MAX_GAME_PLY = 2048: 300-move game + search depth + margin)
   final Int64List keyStack = Int64List(2048);
   final Int32List undoCaptured = Int32List(2048);
   final Int32List undoCastling = Int32List(2048);
   final Int32List undoEp = Int32List(2048);
-  final Int32List undoHalfmove = Int32List(2048);
+  final Int32List undoHalfMove = Int32List(2048);
 
   Board() : this.fromFEN(FenPosition.startingPosition);
 
@@ -50,7 +51,7 @@ class Board {
 
     castling = castlingRightsAsInt();
     epSquare = enPassantSquare;
-    halfmove = fenPosition.halfmoveClock;
+    halfMove = fenPosition.halfmoveClock;
 
     zobristKey = Zobrist.getZobristForBoard(this);
     gameStateHistory = [];
@@ -73,12 +74,16 @@ class Board {
     int capturedPiece = squares[move.to];
     int color = whiteToPlay ? Piece.white : Piece.black;
 
+    // Save current state
+    undoCaptured[plyCount] = capturedPiece;
+    undoCastling[plyCount] = castlingRightsAsInt();
+    undoEp[plyCount] = enPassantSquare;
+    undoHalfMove[plyCount] = halfMove;
+    keyStack[plyCount] = zobristKey;
+
     gameState.enPassantSquare = enPassantSquare;
     gameState.capturedPiece = capturedPiece;
     int startingCastlingIndex = castlingRightsAsInt();
-
-    // Remove selected piece from start square zobrist
-    zobristKey ^= Zobrist.piecesArray[selectedPiece][move.from]; // Remove starting peice from starting square
 
     // Handle En passant file
     zobristKey ^= Zobrist.enPassantSquares[enPassantSquare + 1]; // Remove old enpassant square
@@ -92,19 +97,17 @@ class Board {
     zobristKey ^= Zobrist.enPassantSquares[enPassantSquare + 1]; // Add new en passant square
 
     // Handle promotion
-    if (move.promotion != 0) {
-      selectedPiece = move.promotingPiece() | color;
-    }
 
-    // Handle en passant captures
+    // Handle captures
     if (move.enPassantCapture) {
-      int direction = whiteToPlay ? 8 : -8;
-      int enPassantCaptureSquare = move.to + direction;
+      int capturedSq = move.to + (whiteToPlay ? 8 : -8);
+      capturedPiece = squares[capturedSq];
 
-      zobristKey ^= Zobrist.piecesArray[squares[enPassantCaptureSquare]]
-          [enPassantCaptureSquare]; // Remove en passant capture square from zobrist
-      gameState.capturedPiece = squares[enPassantCaptureSquare];
-      squares[enPassantCaptureSquare] = 0;
+      undoCaptured[plyCount] = capturedPiece;
+      gameState.capturedPiece = capturedPiece;
+      _remove(capturedPiece, capturedSq);
+    } else if (capturedPiece != Piece.none) {
+      _remove(capturedPiece, move.to);
     }
 
     // Castling
@@ -113,10 +116,7 @@ class Board {
       int rookStartingIndex = move.to % 8 == 2 ? castlingRank * 8 + 0 : castlingRank * 8 + 7;
       int rookTargetIndex = move.to % 8 == 2 ? castlingRank * 8 + 3 : castlingRank * 8 + 5;
 
-      squares[rookTargetIndex] = squares[rookStartingIndex];
-      squares[rookStartingIndex] = 0;
-      zobristKey ^= Zobrist.piecesArray[squares[rookTargetIndex]][rookStartingIndex];
-      zobristKey ^= Zobrist.piecesArray[squares[rookTargetIndex]][rookTargetIndex];
+      _move(Piece.rook | color, rookStartingIndex, rookTargetIndex);
 
       switch (castlingRank) {
         case 0:
@@ -177,11 +177,13 @@ class Board {
     // End of castling
 
     // Update positions
-    squares[move.to] = selectedPiece;
-    squares[move.from] = 0;
-
-    zobristKey ^= Zobrist.piecesArray[capturedPiece][move.to]; // Remove piece from target square
-    zobristKey ^= Zobrist.piecesArray[selectedPiece][move.to]; // Add starting piece to target square
+    if (move.promotion != 0) {
+      _remove(selectedPiece, move.from);
+      selectedPiece = move.promotingPiece() | color;
+      _put(selectedPiece, move.to);
+    } else {
+      _move(selectedPiece, move.from, move.to);
+    }
 
     // Swap sides
     whiteToPlay = !whiteToPlay;
@@ -189,8 +191,11 @@ class Board {
 
     gameState.fiftyMoveRule = fiftyMoveRule;
     fiftyMoveRule++;
+    plyCount++;
+    halfMove++;
     if (Piece.type(selectedPiece) == Piece.pawn || Piece.type(capturedPiece) != Piece.none) {
       fiftyMoveRule = 0;
+      halfMove = 0;
     }
 
     gameStateHistory.add(gameState);
@@ -198,13 +203,19 @@ class Board {
   }
 
   unMakeMove(Move move) {
+    removeMoveFromHashHistory();
+    plyCount--;
+    halfMove = undoHalfMove[plyCount];
+
     int selectedPiece = squares[move.to]; // The piece at the end square of the move we are undo
     int color = whiteToPlay ? Piece.black : Piece.white; // The last move was the opposite of the current state
     int capturedPiece = gameStateHistory.last.capturedPiece;
 
     // Handle promotion
     if (move.promotion != 0) {
+      _remove(selectedPiece, move.to);
       selectedPiece = Piece.pawn | color;
+      _put(selectedPiece, move.from);
     }
 
     // Handle castles
@@ -213,8 +224,7 @@ class Board {
       int rookStartingIndex = move.to % 8 == 2 ? castlingRank * 8 + 0 : castlingRank * 8 + 7;
       int rookTargetIndex = move.to % 8 == 2 ? castlingRank * 8 + 3 : castlingRank * 8 + 5;
 
-      squares[rookStartingIndex] = squares[rookTargetIndex];
-      squares[rookTargetIndex] = 0;
+      _move(Piece.rook | color, rookTargetIndex, rookStartingIndex);
 
       switch (castlingRank) {
         case 0:
@@ -271,24 +281,21 @@ class Board {
 
     // Handle en passant captures
     if (move.enPassantCapture) {
-      int direction = whiteToPlay ? -8 : 8; // The last move was the opposite of the current state
-      int enPassantCaptureSquare = move.to + direction;
-
-      squares[enPassantCaptureSquare] = capturedPiece;
-      capturedPiece = 0;
-      enPassantSquare = move.to;
+      int captureSq = move.to + (whiteToPlay ? -8 : 8);
+      _put(capturedPiece, captureSq);
+      capturedPiece = Piece.none;
     }
 
     enPassantSquare = gameStateHistory.last.enPassantSquare;
 
     fiftyMoveRule = gameStateHistory.last.fiftyMoveRule;
 
-    removeMoveFromHashHistory();
-    zobristKey = gameStateHistory.last.zobristKey;
     gameStateHistory.removeLast();
 
-    squares[move.from] = selectedPiece;
-    squares[move.to] = capturedPiece;
+    if (move.promotion == 0) _move(selectedPiece, move.to, move.from);
+    if (capturedPiece != Piece.none) _put(capturedPiece, move.to);
+    zobristKey = keyStack[plyCount];
+
     whiteToPlay = !whiteToPlay;
   }
 
@@ -313,7 +320,7 @@ class Board {
   @pragma('vm:prefer-inline')
   void _put(int piece, int sq) {
     squares[sq] = piece;
-    zobristKey ^= Zobrist.piecesArray[piece][sq];
+    zobristKey ^= Zobrist.pieces[piece * 64 + sq];
     pieceBB[piece] |= 1 << sq;
     if (Piece.isColor(piece, Piece.white)) {
       colourBB[0] |= 1 << sq;
@@ -325,7 +332,7 @@ class Board {
   @pragma('vm:prefer-inline')
   void _remove(int piece, int sq) {
     squares[sq] = 0;
-    zobristKey ^= Zobrist.piecesArray[piece][sq];
+    zobristKey ^= Zobrist.pieces[piece * 64 + sq];
     pieceBB[piece] &= ~(1 << sq);
 
     if (Piece.isColor(piece, Piece.white)) {
@@ -339,7 +346,7 @@ class Board {
   void _move(int piece, int from, int to) {
     squares[from] = 0;
     squares[to] = piece;
-    zobristKey ^= Zobrist.piecesArray[piece][from] ^ Zobrist.piecesArray[piece][to];
+    zobristKey ^= Zobrist.pieces[piece * 64 + from] ^ Zobrist.pieces[piece * 64 + to];
     int mask = (1 << from) | (1 << to);
     pieceBB[piece] ^= mask;
     if (Piece.isColor(piece, Piece.white)) {
@@ -347,5 +354,17 @@ class Board {
     } else {
       colourBB[1] ^= mask;
     }
+  }
+
+  bool isRepetition() {
+    final oldest = plyCount - halfMove;
+    for (int i = plyCount - 2; i >= oldest && i >= 0; i -= 2) {
+      if (keyStack[i] == zobristKey) return true;
+    }
+    return false;
+  }
+
+  int kingSquare(int color) {
+    return BitOps.lsb(pieceBB[Piece.king | color]);
   }
 }

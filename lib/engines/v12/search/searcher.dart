@@ -114,7 +114,7 @@ class Searcher {
     }
     if (aborted) return 0;
 
-    if (plyFromRoot > 0 && (board.hashHistory[board.zobristKey] ?? 0) >= 2) {
+    if (plyFromRoot > 0 && board.isRepetition()) {
       return drawScore; // Threefold repetition
     }
 

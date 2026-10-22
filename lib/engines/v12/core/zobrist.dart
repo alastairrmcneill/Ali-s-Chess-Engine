@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:ace/engines/v12/core/board.dart';
 import 'package:ace/engines/v12/core/piece.dart';
@@ -7,26 +8,22 @@ class Zobrist {
   static final Random _random = Random();
 
   // List for each type of peice and within that, each square on the board
-  static List<List<int>> piecesArray = List.generate(
-    Piece.maxPieceIndex + 1,
-    (index) => List.generate(64, (index) => 0, growable: false),
-    growable: false,
-  );
+  static final Int64List pieces = Int64List((Piece.maxPieceIndex + 1) * 64);
 
   // There are 2^4 different possible castling combos, each needs a random number
-  static List<int> castlingRights = List.generate(16, (index) => 0, growable: false);
+  static final Int64List castlingRights = Int64List(16);
 
   // EnPassantSquare (need to include 0 for no enpassant square)
-  static List<int> enPassantSquares = List.generate(65, (index) => 0, growable: false);
+  static final Int64List enPassantSquares = Int64List(65);
 
   // Side to move (0 for white, number for black)
   static int sideToMove = 0;
 
   Zobrist() {
-    // Setup piecesArray
+    // Setup pieces
     for (int piece in Piece.pieceList) {
       for (int index = 0; index < 64; index++) {
-        piecesArray[piece][index] = generateRandom64BitNumber();
+        pieces[piece * 64 + index] = generateRandom64BitNumber();
       }
     }
 
@@ -59,7 +56,7 @@ class Zobrist {
     // Pieces
     for (int index = 0; index < 64; index++) {
       int piece = board.squares[index];
-      zobristkey ^= piecesArray[piece][index];
+      zobristkey ^= pieces[piece * 64 + index];
     }
 
     // Castling
