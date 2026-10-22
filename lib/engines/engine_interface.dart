@@ -20,6 +20,7 @@ class SearchStats {
   int qBetaCutoffs = 0;
   int qCheckNodes = 0; // quiescence nodes where the side to move was in check
   int firstMoveCutoffs = 0; // beta cutoffs where the first move tried was the cutting one  = 0; measures move ordering
+  int deltaPrunedMoves = 0; // number of moves pruned by delta pruning
   int? eval = 0; // centipawns from the side to move's point of view
   String? bestMove = ''; // UCI
   List<String> pv = const []; // UCI, best effort; may be empty
@@ -36,6 +37,7 @@ class SearchStats {
     this.betaCutoffs = 0,
     this.qBetaCutoffs = 0,
     this.qCheckNodes = 0,
+    this.deltaPrunedMoves = 0,
     this.firstMoveCutoffs = 0,
     this.eval = 0,
     this.bestMove = '',
@@ -57,6 +59,7 @@ class SearchStats {
         betaCutoffs: json['betaCutoffs'] as int? ?? 0,
         qBetaCutoffs: json['qBetaCutoffs'] as int? ?? 0,
         qCheckNodes: json['qCheckNodes'] as int? ?? 0,
+        deltaPrunedMoves: json['deltaPrunedMoves'] as int? ?? 0,
         firstMoveCutoffs: json['firstMoveCutoffs'] as int? ?? 0,
         elapsed: Duration(milliseconds: json['timeMs'] as int),
         aborted: json['aborted'] as bool,
@@ -75,6 +78,7 @@ class SearchStats {
         'betaCutoffs': betaCutoffs,
         'qBetaCutoffs': qBetaCutoffs,
         'qCheckNodes': qCheckNodes,
+        'deltaPrunedMoves': deltaPrunedMoves,
         'firstMoveCutoffs': firstMoveCutoffs,
         'timeMs': elapsed.inMilliseconds,
         'aborted': aborted,
