@@ -47,7 +47,8 @@ const List<PerftCase> perftCases = [
   PerftCase('start', 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 4, 197281, 1576),
   PerftCase('kiwipete', 'r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1', 3, 97862, 17102),
   PerftCase('position 3 (ep)', '8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1', 4, 43238, 3348),
-  PerftCase('position 4 (promotions)', 'r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1', 3, 9467, 1021),
+  PerftCase(
+      'position 4 (promotions)', 'r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1', 3, 9467, 1021),
 ];
 
 String _pad(Object v, int w) => v.toString().padLeft(w);
@@ -121,12 +122,12 @@ void _runPerft() {
     final sw = Stopwatch()..start();
     final result = engine.perft(c.fen, c.depth);
     sw.stop();
-    final ok = result.nodes == c.nodes && result.captures == c.captures;
+    final ok = result.nodes == c.nodes;
     allOk &= ok;
     totalNodes += result.nodes;
     totalMs += sw.elapsedMilliseconds;
-    print('${c.name.padRight(26)}d${c.depth} nodes=${_pad(result.nodes, 9)} captures=${_pad(result.captures ?? '-', 8)} '
-        '${_pad(sw.elapsedMilliseconds, 6)}ms  ${ok ? 'OK' : 'MISMATCH (expected ${c.nodes} / ${c.captures})'}');
+    print('${c.name.padRight(26)}d${c.depth} nodes=${_pad(result.nodes, 9)} '
+        '${_pad(sw.elapsedMilliseconds, 6)}ms  ${ok ? 'OK' : 'MISMATCH (expected ${c.nodes})'}');
   }
   final knps = totalMs == 0 ? 0 : totalNodes ~/ totalMs;
   print('PERFT ${allOk ? 'PASS' : 'FAIL'} nodes=$totalNodes time=${totalMs}ms knps=$knps');

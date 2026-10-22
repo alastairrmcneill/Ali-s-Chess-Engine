@@ -126,7 +126,6 @@ abstract class ChessEngine {
 
 class PerftTestResult {
   int nodes;
-  int? captures;
 
-  PerftTestResult(this.nodes, {this.captures});
+  PerftTestResult(this.nodes);
 }

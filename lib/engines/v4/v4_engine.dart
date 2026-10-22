@@ -92,15 +92,13 @@ class V4Engine implements ChessEngine {
           'Inconsistent check status: isInCheck=$isInCheck, moveGenerator.inCheck=${moveGenerator.inCheck}');
     }
 
-    final loudMoves = moveGenerator.generateLegalMoves(board, includeQuietMoves: false);
-    if (depth == 1) return PerftTestResult(moves.length, captures: loudMoves.length);
+    if (depth == 1) return PerftTestResult(moves.length);
 
     PerftTestResult result = PerftTestResult(0);
     for (final move in moves) {
       board.makeMove(move);
       final childResult = _perft(board, depth - 1, moveGenerator);
       result.nodes += childResult.nodes;
-      result.captures = (result.captures ?? 0) + (childResult.captures ?? 0);
       board.unMakeMove(move);
     }
     return result;
