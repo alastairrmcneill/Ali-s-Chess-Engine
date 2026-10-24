@@ -5,6 +5,7 @@ import 'package:ace/engines/v12/core/attack_tables.dart';
 import 'package:ace/engines/v12/core/bitboard.dart';
 import 'package:ace/engines/v12/core/move.dart';
 import 'package:ace/engines/v12/core/piece.dart';
+import 'package:ace/engines/v12/core/sliders.dart';
 import 'package:ace/engines/v12/core/zobrist.dart';
 
 class Board {
@@ -23,7 +24,9 @@ class Board {
   final Int32List undoCastling = Int32List(2048);
   final Int32List undoEp = Int32List(2048);
   final Int32List undoHalfMove = Int32List(2048);
-  static final Int32List _castleMask = AttackTables().castleMask;
+  static final AttackTables _tables = AttackTables();
+  static final Sliders _sliders = Sliders(_tables);
+  static final Int32List _castleMask = _tables.castleMask;
 
   Board() : this.fromFEN(FenPosition.startingPosition);
 
@@ -208,5 +211,35 @@ class Board {
 
   int kingSquare(int color) {
     return BitOps.lsb(pieceBB[Piece.king | color]);
+  }
+
+  int attackersOfSquare(int sq, int occupied, int attacker) {
+    int defender = 1 - attacker;
+    int attackingColour = attacker * 8;
+
+    int attackingQueens = pieceBB[(Piece.queen | attackingColour)];
+    int attackingRooks = pieceBB[(Piece.rook | attackingColour)];
+    int attackingBishops = pieceBB[(Piece.bishop | attackingColour)];
+    int attackingKnights = pieceBB[(Piece.knight | attackingColour)];
+    int attackingPawns = pieceBB[(Piece.pawn | attackingColour)];
+    int attackingKing = pieceBB[(Piece.king | attackingColour)];
+
+    // Pawn logic: white king on e1 (sq 60), attacker = 1 (black), so defender = 0 (white).
+    // - pawnAttacks[0 * 64 + 60] is a white pawn's attacks from e1, which are d2 and f2.
+    // - A black pawn on d2 or f2 attacks e1, so & blackPawns finds it.
+
+    // Checkers
+    return (_tables.knightAttacks[sq] & attackingKnights) |
+        (_tables.kingAttacks[sq] & attackingKing) |
+        (_tables.pawnAttacks[defender * 64 + sq] & attackingPawns) |
+        _sliders.rookAttacks(sq, occupied) & (attackingRooks | attackingQueens) |
+        _sliders.bishopAttacks(sq, occupied) & (attackingBishops | attackingQueens);
+  }
+
+  bool isInCheck() {
+    int us = whiteToPlay ? 0 : 1;
+    int ksq = kingSquare(us * 8);
+    int attackers = attackersOfSquare(ksq, colourBB[0] | colourBB[1], 1 - us);
+    return attackers != 0;
   }
 }

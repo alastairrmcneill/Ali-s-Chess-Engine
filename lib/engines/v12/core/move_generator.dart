@@ -1,647 +1,249 @@
+import 'dart:typed_data';
+
+import 'package:ace/engines/v12/core/attack_tables.dart';
+import 'package:ace/engines/v12/core/bitboard.dart';
 import 'package:ace/engines/v12/core/board.dart';
 import 'package:ace/engines/v12/core/move.dart';
 import 'package:ace/engines/v12/core/piece.dart';
-import 'package:ace/engines/v12/core/precompute_data.dart';
-import 'package:ace/chess_core/notation/board_helper.dart';
+import 'package:ace/engines/v12/core/sliders.dart';
 
 class MoveGenerator {
-  late List<Move> moves;
-  late Board board;
-  late List<int> friendlyPawnIndexes;
-  late List<int> opponentPawnIndexes;
-  late List<int> friendlyKnightIndexes;
-  late List<int> opponentKnightIndexes;
-  late int friendlyKingIndex;
-  late int opponentKingIndex;
-  late List<int> friendlyBishopIndexes;
-  late List<int> opponentBishopIndexes;
-  late List<int> friendlyRookIndexes;
-  late List<int> opponentRookIndexes;
-  late List<int> friendlyQueenIndexes;
-  late List<int> opponentQueenIndexes;
-  late Set<int> opponentAttackMap;
-  late Set<int> pinnedRayIndexes;
-  late bool pinExistsInCurrentPosition;
-  late Set<int> checkedRayIndexes;
-  late PrecomputeData precomputeData;
-  late int friendlyColor;
-  late int opponentColor;
-  late bool inCheck;
-  late bool inDoubleCheck;
-  late bool generateQuietMoves;
+  List<Move> moves = [];
+  static final AttackTables a = AttackTables();
+  static final Sliders s = Sliders(a);
 
-  MoveGenerator() {
-    board = Board();
-    precomputeData = PrecomputeData();
-    generateQuietMoves = true;
-    init();
-  }
+  // Debug values from the last generate() call, shown by the Generator tab next to a naive reference.
+  // null = not computed yet. Assign each one when you implement its step, then leave them in (they are cheap).
+  int? lastCheckers; // step 3: bitboard of pieces giving check
+  int? lastCheckMask; // step 5: -1 when not in check, else between | checkers
+  int? lastPinned; // step 6: bitboard of our pinned pieces
+  final Uint64List _pinRay = Uint64List(64);
 
-  void init() {
-    friendlyColor = board.whiteToPlay ? Piece.white : Piece.black;
-    opponentColor = board.whiteToPlay ? Piece.black : Piece.white;
+  MoveGenerator();
+
+  List<Move> generate(Board board, {bool capturesOnly = false}) {
     moves = [];
-    friendlyPawnIndexes = [];
-    opponentPawnIndexes = [];
-    friendlyKnightIndexes = [];
-    opponentKnightIndexes = [];
-    friendlyKingIndex = -1;
-    opponentKingIndex = -1;
-    friendlyBishopIndexes = [];
-    opponentBishopIndexes = [];
-    friendlyRookIndexes = [];
-    opponentRookIndexes = [];
-    friendlyQueenIndexes = [];
-    opponentQueenIndexes = [];
-    opponentAttackMap = {};
-    checkedRayIndexes = {};
-    pinnedRayIndexes = {};
-    pinExistsInCurrentPosition = false;
-    inCheck = false;
-    inDoubleCheck = false;
+    lastCheckers = lastCheckMask = lastPinned = null;
 
-    findPieces();
-  }
+    // Setup
+    int us = board.whiteToPlay ? 0 : 1;
+    int them = board.whiteToPlay ? 1 : 0;
+    int ourC = us * 8;
+    int theirC = them * 8;
+    int ourBB = board.colourBB[us];
+    int theirBB = board.colourBB[them];
+    int occ = ourBB | theirBB;
+    int ksq = BitOps.lsb(board.pieceBB[(Piece.king | ourC)]);
+    int ksqBit = 1 << ksq;
 
-  List<Move> generateLegalMoves(Board board, {bool includeQuietMoves = true}) {
-    this.board = board;
-    generateQuietMoves = includeQuietMoves;
-    init();
+    int theirQueens = board.pieceBB[(Piece.queen | theirC)];
+    int theirRooks = board.pieceBB[(Piece.rook | theirC)];
+    int theirBishops = board.pieceBB[(Piece.bishop | theirC)];
+    int theirRQ = theirRooks | theirQueens;
+    int theirBQ = theirBishops | theirQueens;
+    int theirKnights = board.pieceBB[(Piece.knight | theirC)];
+    int theirPawns = board.pieceBB[(Piece.pawn | theirC)];
 
-    // Find where opponent attacks
-    generateOpponentAttackData();
+    // Checks
+    int checkers = (a.knightAttacks[ksq] & theirKnights) |
+        (a.pawnAttacks[us * 64 + ksq] & theirPawns) |
+        s.rookAttacks(ksq, occ) & theirRQ |
+        s.bishopAttacks(ksq, occ) & theirBQ;
 
-    if (inCheck) generateQuietMoves = true; // evasions can be quiet
+    lastCheckers = checkers;
+    bool inCheck = checkers != 0;
+    // Subtracting 1 from a bitboard and ANDing with itself checks if more than one bit is set
+    bool inDoubleCheck = (checkers & (checkers - 1)) != 0;
 
-    // Check king moves including checks or checkmates
-    generateKingMoves();
+    // King Moves
+    int kingTargets = a.kingAttacks[ksq] & ~ourBB;
 
-    // If in double check then only the king can move so stop the search
+    if (capturesOnly) kingTargets &= theirBB;
+    final occNoKing = occ ^ ksqBit;
+
+    while (kingTargets != 0) {
+      final to = BitOps.lsb(kingTargets);
+      kingTargets &= kingTargets - 1;
+
+      if (board.attackersOfSquare(to, occNoKing, them) == 0) {
+        moves.add(Move.encode(ksq, to));
+      }
+    }
+
     if (inDoubleCheck) return moves;
 
-    // Check the rest of the pieces
-    generateRookMoves();
-    generateBishopMoves();
-    generateQueenMoves();
-    generateKnightMoves();
-    generatePawnMoves();
+    // Check mask
+    int checkMask = -1; // Every square is availble
+    if (inCheck) {
+      // Are there any squares between king and checker?
+      // Add those to the mask, or just add the chcker if its a pawn or knight attacker
+      int checker = BitOps.lsb(checkers); // Get the square of the checking piece
+      checkMask = a.between[ksq * 64 + checker] | checkers;
+    }
+    lastCheckMask = checkMask;
+
+    // Pins
+    _pinRay.fillRange(0, 64, 0); // Clear the pin rays for this move generation
+
+    int snipers = s.rookAttacks(ksq, 0) & theirRQ | s.bishopAttacks(ksq, 0) & theirBQ;
+
+    int pinned = 0;
+    while (snipers != 0) {
+      final sniper = BitOps.lsb(snipers);
+      snipers &= snipers - 1;
+
+      int between = a.between[ksq * 64 + sniper];
+
+      int blockers = between & occ;
+
+      // Exactly 1 piece in the way and its ours then it is pinned
+      if (blockers != 0 && (blockers & (blockers - 1)) == 0 && (blockers & ourBB) != 0) {
+        pinned |= blockers;
+
+        // The piece on that square can only move along the line or capture the sniper
+        _pinRay[BitOps.lsb(blockers)] = between | (1 << sniper);
+      }
+    }
+
+    lastPinned = pinned;
+
+    // Knight moves
+    int targets = ~ourBB & checkMask;
+
+    if (capturesOnly) targets &= theirBB;
+
+    int knights = board.pieceBB[(Piece.knight | ourC)] & ~pinned;
+
+    while (knights != 0) {
+      int from = BitOps.lsb(knights);
+      knights &= knights - 1;
+
+      _addMoves(from, a.knightAttacks[from] & targets);
+    }
+
+    // Slider moves
+
+    _sliderMoves(board.pieceBB[(Piece.bishop | ourC)], s.bishopAttacks, occ, targets, pinned);
+    _sliderMoves(board.pieceBB[(Piece.rook | ourC)], s.rookAttacks, occ, targets, pinned);
+    _sliderMoves(board.pieceBB[(Piece.queen | ourC)], s.queenAttacks, occ, targets, pinned);
+
+    // Pawn moves
+    int dir = us == 0 ? -8 : 8;
+    int startRank = us == 0 ? 6 : 1;
+    int promoRank = us == 0 ? 1 : 6;
+
+    int ourPawns = board.pieceBB[(Piece.pawn | ourC)];
+
+    while (ourPawns != 0) {
+      int from = BitOps.lsb(ourPawns);
+      ourPawns &= ourPawns - 1;
+
+      int rank = from >> 3;
+
+      int allowed = checkMask & (((pinned >>> from) & 1) == 1 ? _pinRay[from] : -1);
+
+      if (!capturesOnly) {
+        int one = from + dir;
+        // Check if the one push is not occupied
+        if ((occ >>> one) & 1 == 0) {
+          if ((allowed >>> one) & 1 == 1) {
+            rank == promoRank ? _promotions(from, one) : moves.add(Move.encode(from, one));
+          }
+          if (rank == startRank) {
+            int two = from + 2 * dir;
+            if ((occ >>> two) & 1 == 0 && (allowed >>> two) & 1 == 1) {
+              moves.add(Move.encode(from, two, 3)); // flag 3 = double push
+            }
+          }
+        }
+      }
+
+      int captures = a.pawnAttacks[us * 64 + from] & theirBB & allowed;
+
+      while (captures != 0) {
+        int to = BitOps.lsb(captures);
+        captures &= captures - 1;
+        rank == promoRank ? _promotions(from, to) : moves.add(Move.encode(from, to));
+      }
+    }
+
+    // En passant
+    int ep = board.epSquare;
+    if (ep >= 0) {
+      int captureSq = ep + (us == 0 ? 8 : -8);
+
+      int attackers = a.pawnAttacks[them * 64 + ep] & board.pieceBB[(Piece.pawn | ourC)];
+
+      while (attackers != 0) {
+        int from = BitOps.lsb(attackers);
+        attackers &= attackers - 1;
+
+        int occ2 = (occ ^ (1 << from) ^ (1 << captureSq) | (1 << ep));
+        int theirPawnsAfter = theirPawns & ~(1 << captureSq);
+
+        int attacked = (a.knightAttacks[ksq] & theirKnights) |
+            (a.pawnAttacks[us * 64 + ksq] & theirPawnsAfter) |
+            s.rookAttacks(ksq, occ2) & (theirRooks | theirQueens) |
+            s.bishopAttacks(ksq, occ2) & (theirBishops | theirQueens);
+
+        if (attacked == 0) moves.add(Move.encode(from, ep, 1));
+      }
+    }
+
+    // Castling
+    if (!inCheck && !capturesOnly) {
+      int base = us == 0 ? 56 : 0;
+
+      // If kight is on its home square
+      if (ksq == base + 4) {
+        int kingSideRight = us == 0 ? 8 : 2;
+        int queenSideRight = us == 0 ? 4 : 1;
+
+        if (board.castling & kingSideRight != 0 &&
+            occ & ((1 << (base + 5)) | (1 << (base + 6))) == 0 &&
+            board.attackersOfSquare(base + 5, occ, them) == 0 &&
+            board.attackersOfSquare(base + 6, occ, them) == 0) {
+          moves.add(Move.encode(ksq, base + 6, 2)); // flag 2 = king-side castling
+        }
+        if (board.castling & queenSideRight != 0 &&
+            occ & ((1 << (base + 1)) | (1 << (base + 2)) | (1 << (base + 3))) == 0 &&
+            board.attackersOfSquare(base + 2, occ, them) == 0 &&
+            board.attackersOfSquare(base + 3, occ, them) == 0) {
+          moves.add(Move.encode(ksq, base + 2, 2)); // flag 2 = queen-side castling
+        }
+      }
+    }
 
     return moves;
   }
 
-  bool isInCheck(Board board) {
-    final friendly = board.whiteToPlay ? Piece.white : Piece.black;
-    final opponent = board.whiteToPlay ? Piece.black : Piece.white;
-    final king = board.squares.indexWhere((piece) => Piece.type(piece) == Piece.king && Piece.isColor(piece, friendly));
-
-    // Knights
-    for (final square in precomputeData.knightMoves[king]) {
-      final piece = board.squares[square];
-      if (Piece.type(piece) == Piece.knight && Piece.isColor(piece, opponent)) {
-        return true;
-      }
-    }
-
-    // Pawn
-    final pawnMoves = board.whiteToPlay ? precomputeData.whitePawnCaptures : precomputeData.blackPawnCaptures;
-    for (final square in pawnMoves[king]) {
-      final piece = board.squares[square];
-      if (Piece.type(piece) == Piece.pawn && Piece.isColor(piece, opponent)) {
-        return true;
-      }
-    }
-
-    // Sliders
-    for (int dir = 0; dir < 8; dir++) {
-      final isDiagonal = dir >= 4;
-      final offset = precomputeData.directionOffsets[dir];
-
-      for (int n = 1; n <= precomputeData.numSquaresToEdge[king][dir]; n++) {
-        final piece = board.squares[king + n * offset];
-        if (piece == Piece.none) continue;
-        if (Piece.isColor(piece, opponent) &&
-            (isDiagonal
-                ? Piece.type(piece) == Piece.bishop || Piece.type(piece) == Piece.queen
-                : Piece.type(piece) == Piece.rook || Piece.type(piece) == Piece.queen)) {
-          return true;
-        }
-        break; // Stop looking in this direction after hitting any piece
-      }
-    }
-    return false;
-  }
-
-  void findPieces() {
-    for (var index = 0; index < board.squares.length; index++) {
-      int piece = board.squares[index];
-      int pieceType = Piece.type(piece);
-      switch (pieceType) {
-        case Piece.king:
-          Piece.isColor(piece, friendlyColor) ? friendlyKingIndex = index : opponentKingIndex = index;
-          break;
-        case Piece.pawn:
-          Piece.isColor(piece, friendlyColor) ? friendlyPawnIndexes.add(index) : opponentPawnIndexes.add(index);
-          break;
-        case Piece.knight:
-          Piece.isColor(piece, friendlyColor) ? friendlyKnightIndexes.add(index) : opponentKnightIndexes.add(index);
-          break;
-        case Piece.bishop:
-          Piece.isColor(piece, friendlyColor) ? friendlyBishopIndexes.add(index) : opponentBishopIndexes.add(index);
-          break;
-        case Piece.rook:
-          Piece.isColor(piece, friendlyColor) ? friendlyRookIndexes.add(index) : opponentRookIndexes.add(index);
-          break;
-        case Piece.queen:
-          Piece.isColor(piece, friendlyColor) ? friendlyQueenIndexes.add(index) : opponentQueenIndexes.add(index);
-          break;
-        default:
-          break;
-      }
+  void _addMoves(int from, int attacks) {
+    while (attacks != 0) {
+      int to = BitOps.lsb(attacks);
+      attacks &= attacks - 1;
+      moves.add(Move.encode(from, to));
     }
   }
 
-  void generateOpponentAttackData() {
-    //Queen
-    for (int startingIndex in opponentQueenIndexes) {
-      generateSlidingAttackMap(startingIndex, 0, 8);
-    }
+  void _sliderMoves(int bb, int Function(int sq, int occ) attacksFor, int occ, int targets, int pinned) {
+    while (bb != 0) {
+      int from = BitOps.lsb(bb);
+      bb &= bb - 1;
 
-    // Rooks
-    for (int startingIndex in opponentRookIndexes) {
-      generateSlidingAttackMap(startingIndex, 0, 4);
-    }
+      int attacks = attacksFor(from, occ) & targets;
 
-    //Bishops
-    for (int startingIndex in opponentBishopIndexes) {
-      generateSlidingAttackMap(startingIndex, 4, 8);
-    }
-
-    // From the king search out along the lines that sliding pieces could attack to find pin rays
-    int startingDir = 0;
-    int endingDir = 8;
-
-    // If there are no queens then we might not need to search in each direction
-    if (opponentQueenIndexes.isEmpty) {
-      startingDir = opponentRookIndexes.isNotEmpty ? 0 : 4; // If there are rooks then we need the orthogoal directions
-      endingDir = opponentBishopIndexes.isNotEmpty ? 8 : 4; // If there are bishops then we need the diagonal directions
-    }
-
-    // Loop through each direction
-    for (int dir = startingDir; dir < endingDir; dir++) {
-      bool isDiagonal = dir > 3; // Are we looping through the diagonal directions yet
-      int currentDirectionOffset = precomputeData.directionOffsets[dir];
-      bool isFriendlyPieceAlongRay = false;
-      List<int> rayMask = []; // The list of indexes that are along this directional ray
-
-      // Starting from the king square, loop to the edge of the board
-      for (int n = 1; n <= precomputeData.numSquaresToEdge[friendlyKingIndex][dir]; n++) {
-        int targetIndex = friendlyKingIndex + (n * currentDirectionOffset);
-        int piece = board.squares[targetIndex];
-        rayMask.add(targetIndex);
-
-        // Skip if the square is empty
-        if (piece == Piece.none) continue;
-
-        // If it contains a friendly piece then might be a pin
-        if (Piece.isColor(piece, friendlyColor)) {
-          if (!isFriendlyPieceAlongRay) {
-            // If this is the first friendly peice along this line then it might be pinned.
-            isFriendlyPieceAlongRay = true;
-          } else {
-            // This is the second friendly piece we have found in this direction, so definitely no pins
-            break;
-          }
-        } else {
-          // If it contains an opponent peiece then might be check
-          // Check if the peice can move along this direction
-          if ((isDiagonal && Piece.isQueenOrBishop(piece)) || !isDiagonal && Piece.isQueenOrRook(piece)) {
-            if (isFriendlyPieceAlongRay) {
-              // Friendly piece already in the way so its a pin
-              // If it is a pin then we need to store all squares between piece and king
-
-              pinExistsInCurrentPosition = true;
-              pinnedRayIndexes.addAll(rayMask);
-            } else {
-              // No blockers so this is a check
-              // If it is check then we need to store all squares between piece and king so that later we can decide
-              // if a piece can stop check by getting in the way
-
-              checkedRayIndexes.addAll(rayMask);
-              inDoubleCheck = inCheck;
-              inCheck = true;
-            }
-            break;
-          } else {
-            // Piece is an enemy piece that can't move along this direction so is blocking checks or pins
-            break;
-          }
-        }
+      if ((pinned >>> from) & 1 == 1) {
+        // Is this a pinned piece
+        attacks &= _pinRay[from]; // Limit the moves to the pin ray
       }
-
-      // Stop searching if we are in double check
-      if (inDoubleCheck) break;
-    }
-
-    // Add Knights
-    bool isKnightCheck = false;
-    for (int startingIndex in opponentKnightIndexes) {
-      List<int> knightAttacks = precomputeData.knightMoves[startingIndex];
-      opponentAttackMap.addAll(knightAttacks);
-
-      // Can only be in check once from a knight so once the first check is found it skips on
-      if (!isKnightCheck && knightAttacks.contains(friendlyKingIndex)) {
-        isKnightCheck = true;
-        inDoubleCheck = inCheck;
-        inCheck = true;
-        checkedRayIndexes.add(startingIndex);
-      }
-    }
-
-    // Add pawns
-    bool isPawnCheck = false;
-
-    // Select which direction of pawn maps we are looking for
-    List<List<int>> pawnCaptureMap =
-        opponentColor == Piece.white ? precomputeData.whitePawnCaptures : precomputeData.blackPawnCaptures;
-
-    // Loop through all opponent pawns
-    for (int startingIndex in opponentPawnIndexes) {
-      List<int> pawnAttacks = pawnCaptureMap[startingIndex];
-
-      // Pull out the attack squares for this starting index
-
-      opponentAttackMap.addAll(pawnAttacks);
-
-      // Does this put us in check
-      if (!isPawnCheck && pawnAttacks.contains(friendlyKingIndex)) {
-        isPawnCheck = true;
-        inDoubleCheck = inCheck;
-        inCheck = true;
-        checkedRayIndexes.add(startingIndex);
-      }
-    }
-
-    // Add King
-    opponentAttackMap.addAll(precomputeData.kingMoves[opponentKingIndex]);
-  }
-
-  void generateSlidingAttackMap(int startingIndex, int startingDir, int endingDir) {
-    // Looping through the different directions
-    for (int dir = startingDir; dir < endingDir; dir++) {
-      int currentDirectionOffset = precomputeData.directionOffsets[dir];
-      // Find the number of squares in that direction and loop through them
-      for (int n = 1; n <= precomputeData.numSquaresToEdge[startingIndex][dir]; n++) {
-        int targetIndex = startingIndex + (n * currentDirectionOffset);
-
-        opponentAttackMap.add(targetIndex);
-
-        if (targetIndex != friendlyKingIndex) {
-          if (board.squares[targetIndex] != Piece.none) break;
-        }
-      }
+      _addMoves(from, attacks);
     }
   }
 
-  void generateKingMoves() {
-    int startingIndex = friendlyKingIndex;
-
-    for (int targetIndex in precomputeData.kingMoves[startingIndex]) {
-      int pieceOnTargetIndex = board.squares[targetIndex];
-
-      // Skip over everything if its a friendly piece on that square
-      if (Piece.isColor(pieceOnTargetIndex, friendlyColor)) continue;
-
-      bool isCapture = Piece.isColor(pieceOnTargetIndex, opponentColor);
-      if (!isCapture) {
-        // If we aren't capturing a piece then we can't go to a square that is in a check ray
-        if (!generateQuietMoves || checkedRayIndexes.contains(targetIndex)) continue;
-      }
-
-      // Skip if square is under attack
-      if (opponentAttackMap.contains(targetIndex)) continue;
-
-      moves.add(
-        Move(
-          startingSquare: startingIndex,
-          targetSquare: targetIndex,
-        ),
-      );
-
-      // Check if we can castle
-      if (inCheck || isCapture) continue;
-
-      int castlingRank = board.whiteToPlay ? 7 : 0;
-      // Check Queen Side
-      if (BoardHelper.getFileFromIndex(targetIndex) == 3 &&
-          BoardHelper.getRankFromIndex(targetIndex) == castlingRank &&
-          canCastleQueenSide()) {
-        int castleQueenSideIndex = targetIndex - 1;
-        // Check all the squares are empty
-        if (board.squares[castleQueenSideIndex] == Piece.none &&
-            board.squares[castleQueenSideIndex - 1] == Piece.none) {
-          if (!opponentAttackMap.contains(castleQueenSideIndex)) {
-            // Check the final square isn't under attack
-            moves.add(
-              Move(
-                startingSquare: startingIndex,
-                targetSquare: castleQueenSideIndex,
-                castling: true,
-              ),
-            );
-          }
-        }
-      }
-
-      // Check King Side
-      if (BoardHelper.getFileFromIndex(targetIndex) == 5 &&
-          BoardHelper.getRankFromIndex(targetIndex) == castlingRank &&
-          canCastleKingSide()) {
-        // Try castling right
-        int castleKingSideIndex = targetIndex + 1;
-
-        if (board.squares[targetIndex] == Piece.none && board.squares[castleKingSideIndex] == Piece.none) {
-          if (!opponentAttackMap.contains(castleKingSideIndex)) {
-            moves.add(
-              Move(
-                startingSquare: startingIndex,
-                targetSquare: castleKingSideIndex,
-                castling: true,
-              ),
-            );
-          }
-        }
-      }
+  void _promotions(int from, int to) {
+    for (int flag = 4; flag <= 7; flag++) {
+      // 4 Q, 5 N, 6 R, 7 B
+      moves.add(Move.encode(from, to, flag));
     }
-  }
-
-  void generateQueenMoves() {
-    // Loop through all directions
-    for (var index in friendlyQueenIndexes) {
-      generateSlidingMoves(index, 0, 8);
-    }
-  }
-
-  void generateBishopMoves() {
-    // Loop through only diagonal directions
-    for (var index in friendlyBishopIndexes) {
-      generateSlidingMoves(index, 4, 8);
-    }
-  }
-
-  void generateRookMoves() {
-    // Loop through only orthogonal direction
-    for (var index in friendlyRookIndexes) {
-      generateSlidingMoves(index, 0, 4);
-    }
-  }
-
-  void generateSlidingMoves(int startingIndex, int startingDir, int endingDir) {
-    // Is pinned
-    bool isPinned = pinnedRayIndexes.contains(startingIndex);
-
-    // If in check and this piece is pinned then you can't move it at all
-    if (inCheck && isPinned) return;
-
-    // Looping through the different directions
-    for (int dir = startingDir; dir < endingDir; dir++) {
-      int currentDirectionOffset = precomputeData.directionOffsets[dir];
-
-      // If pinned then this piece can on move along the pin ray and not any other direction
-      if (isPinned && !isMovingAlongRay(currentDirectionOffset, friendlyKingIndex, startingIndex)) continue;
-
-      // Find the number of squares in that direction and loop through them
-      for (int n = 1; n <= precomputeData.numSquaresToEdge[startingIndex][dir]; n++) {
-        int targetIndex = startingIndex + (n * currentDirectionOffset);
-        int targetPiece = board.squares[targetIndex];
-
-        if (Piece.isColor(targetPiece, friendlyColor)) break; // Stop searching if you hit friendly peice
-
-        bool isCapture = targetPiece != Piece.none;
-
-        bool movePreventsCheck = checkedRayIndexes.contains(targetIndex);
-
-        // If we aren't in check OR this move prevents check then we can add it
-        // If we are in check AND this move doesn't prevent it then skip adding it, but still stop at any piece below
-        // For the quiescence search only add moves if its a capture unless we are doing a full search then add all moves
-        if ((!inCheck || movePreventsCheck) && (isCapture || generateQuietMoves)) {
-          moves.add(Move(
-            startingSquare: startingIndex,
-            targetSquare: targetIndex,
-          ));
-        }
-
-        // If you capture a piece you can't keep going past it in this direction
-        if (isCapture || movePreventsCheck) break;
-      }
-    }
-  }
-
-  void generateKnightMoves() {
-    for (int startingIndex in friendlyKnightIndexes) {
-      // Can't move it if pinned
-      if (pinnedRayIndexes.contains(startingIndex)) continue;
-
-      for (int targetIndex in precomputeData.knightMoves[startingIndex]) {
-        int targetPiece = board.squares[targetIndex];
-        bool isCapture = Piece.isColor(targetPiece, opponentColor);
-
-        // For the quiescence search only add moves if its a capture unless we are doing a full search then add all moves
-        if (isCapture || generateQuietMoves) {
-          // Skip if piece is friend OR if we are in check and this piece doesn't get into the check ray
-          if (Piece.isColor(targetPiece, friendlyColor) || (inCheck && !checkedRayIndexes.contains(targetIndex))) {
-            continue;
-          }
-
-          moves.add(
-            Move(
-              startingSquare: startingIndex,
-              targetSquare: targetIndex,
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  void generatePawnMoves() {
-    int direction = board.whiteToPlay ? -8 : 8;
-    int beginningRank = board.whiteToPlay ? 6 : 1;
-    int finalRankBeforePromotion = board.whiteToPlay ? 1 : 6;
-
-    for (int startingIndex in friendlyPawnIndexes) {
-      int targetIndex = startingIndex + direction;
-      int targetPiece = board.squares[targetIndex];
-      int startingRank = BoardHelper.getRankFromIndex(startingIndex);
-      bool oneStepFromPromotion = startingRank == finalRankBeforePromotion;
-
-      // Check forward moves can only be added if we are doing a full search as they will never be a capture
-      if (generateQuietMoves) {
-        // Can only move forwards if square is empty
-        if (targetPiece == Piece.none) {
-          // Check if not pinned or move along pin ray
-          if (!pinnedRayIndexes.contains(startingIndex) ||
-              isMovingAlongRay(direction, startingIndex, friendlyKingIndex)) {
-            // Make sure we aren't in check or if we are that this intercepts check
-            if (!inCheck || checkedRayIndexes.contains(targetIndex)) {
-              if (oneStepFromPromotion) {
-                makePromotionMoves(startingIndex, targetIndex);
-              } else {
-                moves.add(Move(
-                  startingSquare: startingIndex,
-                  targetSquare: targetIndex,
-                ));
-              }
-            }
-
-            // Check if pawn can move forwards 2 squares
-            if (startingRank == beginningRank) {
-              targetIndex = startingIndex + direction * 2;
-              targetPiece = board.squares[targetIndex];
-
-              if (targetPiece == Piece.none) {
-                // Make sure we aren't in check and if we are that this move intercepts
-                if (!inCheck || checkedRayIndexes.contains(targetIndex)) {
-                  moves.add(Move(
-                    startingSquare: startingIndex,
-                    targetSquare: targetIndex,
-                    pawnTwoForward: true,
-                  ));
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // TODO: Testing pawn changes
-
-      // Check for captures
-      List<List<int>> pawnCaptureMap =
-          board.whiteToPlay ? precomputeData.whitePawnCaptures : precomputeData.blackPawnCaptures;
-
-      for (int targetIndex in pawnCaptureMap[startingIndex]) {
-        int startingFile = BoardHelper.getFileFromIndex(startingIndex);
-        int targetFile = BoardHelper.getFileFromIndex(targetIndex);
-        int directionOffset = targetFile - startingFile;
-
-        // If we are pinned AND not moving along a ray in the correct direction then skip
-        if (pinnedRayIndexes.contains(startingIndex) &&
-            !isMovingAlongRay(direction + directionOffset, startingIndex, friendlyKingIndex)) continue;
-
-        // If its possible for this pawn to attack the target square
-        if (Piece.isColor(board.squares[targetIndex], opponentColor)) {
-          // If we are in check and this move doesn't intercept it then skip
-          if (inCheck && !checkedRayIndexes.contains(targetIndex)) continue;
-
-          if (oneStepFromPromotion) {
-            makePromotionMoves(startingIndex, targetIndex);
-          } else {
-            moves.add(Move(
-              startingSquare: startingIndex,
-              targetSquare: targetIndex,
-            ));
-          }
-        } else if (targetIndex == board.epSquare) {
-          // If we are in check after en passant then skip
-          if (inCheckAfterEnPassant(startingIndex, targetIndex, board.epSquare - direction)) continue;
-
-          moves.add(Move(
-            startingSquare: startingIndex,
-            targetSquare: targetIndex,
-            enPassantCapture: true,
-          ));
-        }
-      }
-    }
-  }
-
-  void makePromotionMoves(int startingIndex, int targetIndex) {
-    moves.add(Move(
-      startingSquare: startingIndex,
-      targetSquare: targetIndex,
-      promotion: 1, // Queen
-    ));
-
-    moves.add(Move(
-      startingSquare: startingIndex,
-      targetSquare: targetIndex,
-      promotion: 2, // Knight
-    ));
-    moves.add(Move(
-      startingSquare: startingIndex,
-      targetSquare: targetIndex,
-      promotion: 3, // Rook
-    ));
-    moves.add(Move(
-      startingSquare: startingIndex,
-      targetSquare: targetIndex,
-      promotion: 4, // Bishop
-    ));
-  }
-
-  bool inCheckAfterEnPassant(int startingIndex, int targetIndex, int enPassantCaptureIndex) {
-    // Simulate playing
-    board.squares[targetIndex] = board.squares[startingIndex];
-    board.squares[startingIndex] = Piece.none;
-    board.squares[enPassantCaptureIndex] = Piece.none;
-
-    // Check if in check
-    bool isInCheckAfterEnPassant = false;
-
-    int dir = (enPassantCaptureIndex > friendlyKingIndex) ? 1 : 3;
-    int currentDirectionOffset = dir == 1 ? 1 : -1;
-
-    for (int n = 1; n <= precomputeData.numSquaresToEdge[friendlyKingIndex][dir]; n++) {
-      int index = friendlyKingIndex + (n * currentDirectionOffset);
-      int piece = board.squares[index];
-
-      // Skip if square is empty
-      if (piece == Piece.none) continue;
-
-      // If first piece is friendly then stop searching its ok
-      if (Piece.isColor(piece, friendlyColor)) break;
-
-      // If the first one we see is an enemy piece then see if it can move along this ray
-      if (Piece.isColor(piece, opponentColor)) {
-        // Check if rook or queen
-        if (Piece.isQueenOrRook(piece)) {
-          isInCheckAfterEnPassant = true;
-          break;
-        } else {
-          // If not then this piece is blocking any possible checks stop searching
-          break;
-        }
-      }
-    }
-
-    // undo playing
-    board.squares[targetIndex] = Piece.none;
-    board.squares[startingIndex] = Piece.pawn | friendlyColor;
-    board.squares[enPassantCaptureIndex] = Piece.pawn | opponentColor;
-
-    return isInCheckAfterEnPassant;
-  }
-
-  bool canCastleQueenSide() {
-    return board.castling & (board.whiteToPlay ? 4 : 1) != 0;
-  }
-
-  bool canCastleKingSide() {
-    return board.castling & (board.whiteToPlay ? 8 : 2) != 0;
-  }
-
-  bool isMovingAlongRay(int rayDir, int startingIndex, int targetIndex) {
-    int diff = (startingIndex - targetIndex).abs();
-
-    int dir = 1;
-    if (diff % 7 == 0) {
-      dir = 7;
-    } else if (diff % 8 == 0) {
-      dir = 8;
-    } else if (diff % 9 == 0) {
-      dir = 9;
-    }
-
-    return dir == rayDir || -1 * dir == rayDir;
   }
 }

@@ -113,7 +113,7 @@ const int LIGHT_SQUARES = ...;               // squares where (rank+file) is eve
   - Include a file guard on each.
 - **`rays`**: `Uint64List(8*64)`, using the same direction order as V11 (`N,E,S,W,NE,SE,SW,NW` = −8, +1, +8, −1, −7, +9, +7, −9).
 - **`between`**: `Uint64List(64*64)`. Squares strictly between `a` and `b` when they're aligned, else 0.
-- **`line`**: `Uint64List(64*64)`. The segment from `a` to `b`, both endpoints included, when aligned, else 0. It is **not** edge to edge, so don't use it to restrict pinned pieces (see M4 step 5).
+- **`line`**: `Uint64List(64*64)`. The segment from `a` to `b`, both endpoints included, when aligned, else 0. It is **not** edge to edge, so don't use it to restrict pinned pieces (see M4 step 6).
 - **`castleMask`**: `Int32List(64)`, starting at 15. Clear bits as follows:
   - `[56] &= ~4` (a1 → WQ)
   - `[63] &= ~8` (h1 → WK)
@@ -206,7 +206,7 @@ M5 changes the output to an `Int32List` buffer (`int generate(Board b, Int32List
 Differences from the old generator, all on purpose:
 
 - **No `inCheck` / `inDoubleCheck` state on the generator.** Nothing outside the generator reads double check, so it is a local. Mate vs stalemate (`searcher.dart:157`) only needs check status when the move list is empty, so the caller asks the board: `count == 0 ? (board.isInCheck() ? mateScore + ply : 0) : ...`. The generator is then a pure function of the board with no stale state.
-- **No `isInCheck(board)` on the generator.** Check status is a question about the position, so it lives on `Board` (`board.isInCheck()`), usable by search, UCI and the UI. Qsearch (`searcher.dart:204`) calls it before generating, as now. The generator and `Board.isInCheck()` share one attack test, `isAttacked(sq, byColour, occ)` (see step 2), so there is a single copy.
+- **No `isInCheck(board)` on the generator.** Check status is a question about the position, so it lives on `Board` (`board.isInCheck()`), usable by search, UCI and the UI without needing a generator. Qsearch (`searcher.dart:204`) calls it before generating, as now. The generator and `Board.isInCheck()` share one function, `Board.attackersTo(sq, occ, by)` (steps 1 to 3), so there is a single copy of the attack logic.
 - **No "in check forces quiet moves" override.** `capturesOnly: true` means exactly that. The old override only existed to serve callers; qsearch already generates the full list itself when in check (`searcher.dart:214`, `:226`) and filters with `_capturesOnly`. Dropping it also removes the perft "captures" column mismatch, because a pure capture count becomes possible.
 - The `isInCheck == inCheck` consistency assertion in `v12_engine.dart:98` goes away, since there is only one source of truth.
 
@@ -215,94 +215,422 @@ Differences from the old generator, all on purpose:
 - `board.pieceBB[piece]` is indexed by full piece code (`Piece.knight | colourConst`, colourConst 0 white / 8 black). `board.colourBB[0]` is white, `[1]` is black.
 - `us = board.whiteToPlay ? 0 : 1`, `them = 1 - us`, `ourC = us * 8`, `theirC = them * 8`.
 - `pawnAttacks[us * 64 + sq]` are the squares a pawn of colour `us` on `sq` attacks. The squares from which an enemy pawn attacks `sq` are `pawnAttacks[us * 64 + sq] & theirPawns`.
-- `between[a * 64 + b]` is strictly between, 0 if not aligned. `line[a * 64 + b]` is **only the segment from a to b, endpoints included**, not the full edge-to-edge line. For pins you therefore need the king to pinner segment (step 5).
+- `between[a * 64 + b]` is strictly between, 0 if not aligned. `line[a * 64 + b]` is **only the segment from a to b, endpoints included**, not the full edge-to-edge line. For pins you therefore need the king to pinner segment (step 6).
 - **Prerequisite (M2):** the generator reads `board.castling` and `board.epSquare`, which `makeMove` / `unMakeMove` maintain (M2 `makeMove` steps 5 and 6). They must be correct after every move, not just after `fromFEN`.
 - Move flags for `Move.encode(from, to, flag)`: 1 en passant, 2 castling, 3 double push, 4 to 7 promotion to Q, N, R, B. Captures carry no flag.
 - Loop idiom: `while (bb != 0) { final sq = BitOps.lsb(bb); bb &= bb - 1; ... }`.
 
 ### Build order
 
-Do the steps in order. After each one, run the oracle (see "Testing as you go") and expect it to pass only for the cases the finished steps cover, so build the test to compare per piece type, or accept failures for the missing pieces.
+Each step says **what** you add, **why**, **what it gives you**, then the code in small pieces, then how to check it. Do them in order. After each one, open the Generator tab and use the kind filter so you only compare the parts that exist.
 
-**Step 1: setup and checkers.**
-Read `us`, `them`, `ourBB`, `theirBB`, `occ = ourBB | theirBB`, `ksq = lsb(pieceBB[king | ourC])`. Then:
+All snippets use these names: `tables` (`AttackTables`), `sliders` (`Sliders`), `pieceBB = board.pieceBB`. The generator is `generate(Board board, {bool capturesOnly = false})`.
 
-```
-checkers = (knightAttacks[ksq] & theirKnights)
-         | (pawnAttacks[us * 64 + ksq] & theirPawns)
-         | (rookAttacks(ksq, occ)   & (theirRooks | theirQueens))
-         | (bishopAttacks(ksq, occ) & (theirBishops | theirQueens))
-inCheck       = checkers != 0                       // local variable
-inDoubleCheck = inCheck && (checkers & (checkers - 1)) != 0   // local variable
-quiet         = !capturesOnly
-```
+---
 
-`x & (x - 1)` clears the lowest set bit, so a non-zero result means two or more checkers. There is deliberately no `|| inCheck` here (see the API notes): in captures-only mode while in check, only capturing evasions are returned.
-*Check:* temporarily compare your local `inCheck` / `inDoubleCheck` with the old generator's in the oracle test.
+**Step 0: scaffold and read the position.**
 
-**Step 2: a shared `isAttacked(sq, occ, us)` and `Board.isInCheck()`.**
-True if any enemy piece attacks `sq` with the given occupancy: knights, pawns (`pawnAttacks[us * 64 + sq]`), the enemy king (`kingAttacks[sq]`), rooks or queens via `rookAttacks`, bishops or queens via `bishopAttacks`. Early return on the first hit. Put it somewhere both `Board` and the generator can reach (a method on `Board` using shared static `AttackTables` / `Sliders`, or a small static helper class). `board.isInCheck()` is then `isAttacked(kingSquare(us), occ, us)`. Use it for king moves and castling in the generator.
-*Check:* `board.isInCheck()` equals the old `MoveGenerator.isInCheck(board)` over the playouts.
+*What:* the first lines of `generate`: reset `moves`, work out which side is us, and fetch the bitboards everything else needs.
+*Why:* every later step needs the same handful of values. Compute them once, with the right indexing. This is where a lot of bugs start, because two arrays use different indexes (see the table below).
+*Gives you:* a generator that runs on both colours and returns an empty list.
 
-**Step 3: king moves.**
-`targets = kingAttacks[ksq] & ~ourBB`, and `& theirBB` if `capturesOnly`. For each target the move is legal if `!_attacked(target, occ ^ (1 << ksq), us)`. Removing the king from the occupancy stops it "hiding" behind itself on a slider's ray (rook on a1, king on c1: d1 must count as attacked). This replaces the old attack-map special case. Then `if (inDoubleCheck) return moves;`.
-*Check:* positions with only a king and a few enemy pieces. Oracle passes on king-only positions.
+```dart
+List<Move> generate(Board board, {bool capturesOnly = false}) {
+  moves = [];
+  final pieceBB = board.pieceBB;
 
-**Step 4: check mask.**
-Not in check: `checkMask = -1` (all ones). In check (single): `checker = lsb(checkers)`, `checkMask = between[ksq * 64 + checker] | checkers`. For a knight or pawn checker `between` is 0, so the mask is just the checker square. Every non-king move must land inside `checkMask`. That covers capturing the checker and blocking.
+  final us = board.whiteToPlay ? 0 : 1;   // colour INDEX, for colourBB and the pawn tables
+  final them = 1 - us;
+  final ourC = us * 8;                    // colour CODE (0 or 8), for building piece codes
+  final theirC = them * 8;
 
-**Step 5: pins.**
-Squares of our pieces that are the only blocker between the king and an enemy slider.
+  final ourBB = board.colourBB[us];       // NOT colourBB[ourC]: that is index 8 for black and throws
+  final theirBB = board.colourBB[them];
+  final occ = ourBB | theirBB;            // every occupied square
+  final ksq = board.kingSquare(ourC);     // our king's square
 
-```
-snipers = (rookAttacks(ksq, 0)   & (theirRooks   | theirQueens))
-        | (bishopAttacks(ksq, 0) & (theirBishops | theirQueens))
-for each sniper s:
-  b = between[ksq * 64 + s] & occ
-  if b has exactly one bit && (b & ourBB) != 0:
-     pinned |= b
-     pinRay[lsb(b)] = between[ksq * 64 + s] | (1 << s)
+  return moves;
+}
 ```
 
-`pinRay` is a preallocated `Uint64List(64)` field. A pinned piece may only move within its pin ray (king excluded, pinner included, so it can capture the pinner). **Do not use `line[ksq * 64 + from]` for this**: that table stops at `from`, so a pinned piece could never capture its pinner. This was a real bug found by the oracle. `pinRay` entries are only read when the `pinned` bit is set, so no clearing is needed.
+| Array | Index with | Example |
+| --- | --- | --- |
+| `colourBB` | `us` / `them` (0 or 1) | `board.colourBB[us]` |
+| `pieceBB` | full piece code | `pieceBB[Piece.knight \| ourC]` |
+| `pawnAttacks` | `colour * 64 + sq` (0 or 1) | `tables.pawnAttacks[us * 64 + sq]` |
 
-**Step 6: target mask.**
-`targets = ~ourBB & checkMask`, and `& theirBB` if `capturesOnly`.
+*Check:* Generator tab shows no red error text on a white-to-move and a black-to-move preset.
 
-**Step 7: knights.**
-`bb = pieceBB[knight | ourC] & ~pinned` (a pinned knight can never move). For each knight, emit `knightAttacks[from] & targets`. Write a small `_addMoves(from, attacks)` that loops the bits and calls `Move.encode(from, to)`.
+---
+
+**Step 1: `attackersTo(sq, occ, by)`.**
+
+*What:* one function that returns a bitboard of **every piece of colour `by` that attacks `sq`**, given an occupancy `occ`.
+*Why:* "who attacks this square?" is asked in four places: the checkers (who attacks my king), king-move safety, castling squares, and `isInCheck`. Writing it once means one place to get wrong and one place to test. It returns the whole bitboard rather than a yes/no so the same code gives you the checkers *and* how many there are.
+*Gives you:* the building block for steps 2, 3, 4 and 11.
+
+It lives on `Board`, which needs the shared tables (see step 2 for why on `Board`). Give `Board` one shared copy of the tables and sliders and let the generator use them too:
+
+```dart
+// board.dart
+static final AttackTables tables = AttackTables();
+static final Sliders sliders = Sliders(tables);
+static final Int32List _castleMask = tables.castleMask;   // replaces the separate AttackTables() you build now
+```
+
+Now the function, one line per piece type. Read each line as "which of *their* pieces could attack `sq`":
+
+```dart
+/// All pieces of colour index [by] attacking [sq] when the board has occupancy [occ].
+int attackersTo(int sq, int occ, int by) {
+  final byC = by * 8;                                   // piece-code colour bits
+  final queens = pieceBB[Piece.queen | byC];
+  return (tables.knightAttacks[sq] & pieceBB[Piece.knight | byC])
+       | (tables.pawnAttacks[(1 - by) * 64 + sq] & pieceBB[Piece.pawn | byC])
+       | (tables.kingAttacks[sq] & pieceBB[Piece.king | byC])
+       | (sliders.rookAttacks(sq, occ) & (pieceBB[Piece.rook | byC] | queens))
+       | (sliders.bishopAttacks(sq, occ) & (pieceBB[Piece.bishop | byC] | queens));
+}
+```
+
+Why each line works:
+- **Knights and kings** are symmetric. A knight attacks `sq` exactly when `sq` is a knight's jump away from it, so look up the jumps *from `sq`* and intersect with their knights.
+- **Pawns** are not symmetric. Pawns attack forwards only, so take the squares an enemy pawn would have to stand on: those are the squares a pawn of the **opposite** colour on `sq` would attack. That is why the index is `(1 - by) * 64 + sq`, not `by * 64 + sq`.
+- **Sliders**: pretend there is a rook on `sq` and see which squares it reaches (stopping at blockers). Any of their rooks or queens on those squares attacks `sq`. Same for bishops. Queens are in both.
+
+*Check:* add a test that for every square and both colours on playout positions, `attackersTo(sq, occ, by)` equals a naive version. The reference code in `generator_test_tab.dart` (`_attackersOf`) is exactly that naive version, so you can copy it into a test.
+
+---
+
+**Step 2: `Board.isInCheck()`.**
+
+*What:* a one-line method on `Board` that answers "is the side to move in check?".
+*Why on `Board` and not the generator:* check is a fact about the *position*, not about move generation. Several callers need it **without generating moves**: qsearch decides whether to stand pat before it generates anything (`searcher.dart` around `:204`), mate vs stalemate is decided after generation returns empty, and the UI and any future check extension want it too. If it lived on the generator, every one of those callers would need a generator and would have to run it, or the generator would hold "last result" state that can go stale. It is not required that it be on `Board`; it just needs to be callable with only a board, and `Board` already owns everything it reads.
+*Is it the same as step 3?* Same ingredient, different question. `isInCheck` only needs yes or no. The checkers step needs the **bitboard** (which pieces, and how many). Both are `attackersTo` on the king square, so `isInCheck` is just "is that bitboard non-zero".
+
+```dart
+bool isInCheck() {
+  final us = whiteToPlay ? 0 : 1;
+  return attackersTo(kingSquare(us * 8), colourBB[0] | colourBB[1], 1 - us) != 0;
+}
+```
+
+*Gives you:* the single source of truth for check, used by qsearch, mate detection and the oracle.
+*Check:* compare `board.isInCheck()` with the old `MoveGenerator.isInCheck(board)` over random playouts. The Generator tab's reference panel also prints "IN CHECK" for the current position.
+
+---
+
+**Step 3: checkers and double check.**
+
+*What:* in `generate`, ask for the checkers as a bitboard and derive two flags.
+*Why:* the check mask (step 5) needs to know *which* piece is giving check, and double check (two or more checkers) means only the king can move, so everything else can be skipped. A plain `isInCheck()` bool throws that information away.
+*Gives you:* `checkers`, `inCheck`, `inDoubleCheck` as local variables.
+
+```dart
+final checkers = board.attackersTo(ksq, occ, them);
+final inCheck = checkers != 0;
+final inDoubleCheck = (checkers & (checkers - 1)) != 0;
+```
+
+`checkers & (checkers - 1)` clears the lowest set bit, so it is non-zero exactly when two or more bits were set. A king is never adjacent to the enemy king in a legal position, so the king term in `attackersTo` never adds a fake checker.
+*Check:* the generator already has debug fields `lastCheckers`, `lastCheckMask` and `lastPinned` (reset to `null` at the start of every `generate`). Assign `lastCheckers = checkers;` here. The Generator tab then shows `checkers  OK` or `DIFFERS` with your value next to the naive reference, and on the Checkers layer squares where the two differ turn orange.
+
+---
+
+**Step 4: king moves.**
+
+*What:* generate the king's legal moves.
+*Why first:* it is the one piece that can always move, it works in every situation including double check, and it needs no masks. It also exercises `attackersTo` immediately.
+*Gives you:* correct king play, and an early return in double check.
+
+```dart
+int kingTargets = tables.kingAttacks[ksq] & ~ourBB;    // adjacent squares not occupied by our own pieces
+if (capturesOnly) kingTargets &= theirBB;               // captures only: keep enemy-occupied squares
+
+final occNoKing = occ ^ (1 << ksq);                     // the board as if our king had left
+while (kingTargets != 0) {
+  final to = BitOps.lsb(kingTargets);
+  kingTargets &= kingTargets - 1;
+  if (board.attackersTo(to, occNoKing, them) == 0) {
+    moves.add(Move.encode(ksq, to));
+  }
+}
+if (inDoubleCheck) return moves;                        // nothing else can help
+```
+
+Why `occNoKing`: a rook on a1 checks a king on c1 along the rank. If the king steps to d1 with the king still counted in `occ`, the rook's ray stops at c1 and d1 looks safe. It is not: once the king moves, the ray runs on. Removing the king from the occupancy fixes that.
+*Check:* Generator tab, filter **King only**. Presets "Rook check along rank", "Pawn check", "Knight check", "Double check" and the start position (no moves).
+
+---
+
+**Step 5: check mask.**
+
+*What:* a bitboard of the squares that a **non-king** piece is allowed to move to.
+*Why:* in single check, a non-king move is only legal if it captures the checker or blocks the line between checker and king. One mask handles both, so you do not need separate "in check" branches in every piece loop.
+*Gives you:* `checkMask`, applied to every other piece.
+
+```dart
+int checkMask = -1;                                      // not in check: every square allowed (all ones)
+if (inCheck) {
+  final checker = BitOps.lsb(checkers);                  // exactly one checker here
+  checkMask = tables.between[ksq * 64 + checker] | checkers;
+}
+```
+
+`between` is the squares strictly between king and checker (blocks), `| checkers` adds the checker's square (captures). For a knight or pawn checker `between` is 0, so only capturing is allowed, which is right, since you cannot block those.
+*Check:* assign `lastCheckMask = checkMask;`. The Generator tab compares it with the reference (`-1` shows as "all squares") and marks differing squares on the Check mask layer.
+
+---
+
+**Step 6: pins.**
+
+*What:* find our pieces that are the only thing between our king and an enemy slider, and for each, the line it must stay on.
+*Why:* a pinned piece may only move along the line between king and pinner (including capturing the pinner). Without this, we would generate moves that expose our king.
+*Gives you:* `pinned` (bitboard of pinned pieces) and `_pinRay[sq]` (where each may go).
+
+Add a field: `final Uint64List _pinRay = Uint64List(64);`
+
+First find the enemy sliders that *could* pin, by looking out from the king on an empty board:
+
+```dart
+final theirQueens = pieceBB[Piece.queen | theirC];
+final theirRQ = pieceBB[Piece.rook | theirC] | theirQueens;
+final theirBQ = pieceBB[Piece.bishop | theirC] | theirQueens;
+
+int snipers = (sliders.rookAttacks(ksq, 0) & theirRQ)
+            | (sliders.bishopAttacks(ksq, 0) & theirBQ);
+```
+
+Then for each sniper, count what stands between it and the king:
+
+```dart
+int pinned = 0;
+while (snipers != 0) {
+  final sniper = BitOps.lsb(snipers);
+  snipers &= snipers - 1;
+
+  final between = tables.between[ksq * 64 + sniper];
+  final blockers = between & occ;
+  // exactly one piece in the way, and it is ours: that piece is pinned
+  if (blockers != 0 && (blockers & (blockers - 1)) == 0 && (blockers & ourBB) != 0) {
+    pinned |= blockers;
+    _pinRay[BitOps.lsb(blockers)] = between | (1 << sniper);   // may move anywhere on the line, or capture the pinner
+  }
+}
+```
+
+Do **not** use `tables.line[ksq * 64 + from]`: that table only covers the segment from king to the piece, so the pinned piece could never capture its pinner. `_pinRay` entries are only read when the `pinned` bit is set, so they need no clearing.
+*Check:* assign `lastPinned = pinned;`. The Generator tab compares it with the reference and marks differences on the Pinned pieces layer; the Pin rays layer shows the reference rays. Presets: pinned knight, rook, bishop, pawn.
+
+---
+
+**Step 7: target mask and knights.**
+
+*What:* combine the masks into one `targets`, then generate knight moves.
+*Why:* `targets` is the one filter every non-king, non-pawn piece shares: not onto our own pieces, and (in check) only onto check-resolving squares, and (captures-only) only onto enemy pieces. A pinned knight can never move (a knight cannot stay on a line), so remove pinned knights up front.
+*Gives you:* a helper you reuse for every piece.
+
+```dart
+int targets = ~ourBB & checkMask;
+if (capturesOnly) targets &= theirBB;
+```
+
+A tiny helper that turns an attack bitboard into moves:
+
+```dart
+void _addMoves(int from, int attacks) {
+  while (attacks != 0) {
+    final to = BitOps.lsb(attacks);
+    attacks &= attacks - 1;
+    moves.add(Move.encode(from, to));
+  }
+}
+```
+
+Knights:
+
+```dart
+int knights = pieceBB[Piece.knight | ourC] & ~pinned;
+while (knights != 0) {
+  final from = BitOps.lsb(knights);
+  knights &= knights - 1;
+  _addMoves(from, tables.knightAttacks[from] & targets);
+}
+```
+
+*Check:* filter **Knight**. Presets "Knight check", "Rook check (block with N or B)", "Pinned knight".
+
+---
 
 **Step 8: bishops, rooks, queens.**
-For each piece, `attacks = sliders.xAttacks(from, occ) & targets`. If `(pinned >>> from) & 1` is set, also `& pinRay[from]`. Emit with `_addMoves`.
-*Check:* oracle passes on positions without pawns, castling or en passant.
+
+*What:* the same loop for the three sliders, with attacks from `Sliders` and the pin ray applied.
+*Why the pin ray:* a pinned slider may still move, but only along its pin line.
+*Gives you:* all piece moves except pawns and special moves.
+
+One helper covers all three, taking the attack function:
+
+```dart
+void _slideMoves(int bb, int Function(int sq, int occ) attacksFor, int occ, int targets, int pinned) {
+  while (bb != 0) {
+    final from = BitOps.lsb(bb);
+    bb &= bb - 1;
+    int attacks = attacksFor(from, occ) & targets;
+    if ((pinned >>> from) & 1 == 1) attacks &= _pinRay[from];   // stay on the pin line
+    _addMoves(from, attacks);
+  }
+}
+```
+
+and three calls:
+
+```dart
+_slideMoves(pieceBB[Piece.bishop | ourC], sliders.bishopAttacks, occ, targets, pinned);
+_slideMoves(pieceBB[Piece.rook   | ourC], sliders.rookAttacks,   occ, targets, pinned);
+_slideMoves(pieceBB[Piece.queen  | ourC], sliders.queenAttacks,  occ, targets, pinned);
+```
+
+*Check:* filters **Bishop / Rook / Queen**. Presets "Pinned rook", "Pinned bishop", "Bishop check".
+
+---
 
 **Step 9: pawns.**
-Loop per pawn (simplest to get right). Per colour: `dir = us == 0 ? -8 : 8`, `startRank = us == 0 ? 6 : 1`, `promoRank = us == 0 ? 1 : 6` (the rank a pawn stands on one step before promoting). `allowed = checkMask & (pinned ? pinRay[from] : -1)`.
 
-- Pushes (only if `!capturesOnly`): `one = from + dir` must be empty and in `allowed`. From `startRank`, `two = one + dir` must also be empty and in `allowed`, with flag 3. Note `two` is only tried when `one` is empty, even if `one` itself is not in `allowed` (blocking can happen on the second square).
-- Captures: `pawnAttacks[us * 64 + from] & theirBB & allowed`.
-- If the pawn is on `promoRank`, emit four moves per target with flags 4 to 7 instead of one. Quiet promotions only appear when `!capturesOnly`, capture promotions always do.
+*What:* single pushes, double pushes, captures, and promotions.
+*Why a per-pawn loop:* it is the simplest to get right. Pawns are the piece with the most special rules (direction by colour, start rank, promotion), so correctness first; shift-based set-wise generation is a later optimisation.
+*Gives you:* everything except en passant and castling.
+
+Per-colour constants, and the squares a pawn move is *allowed* to land on:
+
+```dart
+final dir = us == 0 ? -8 : 8;               // white moves towards rank 8 (lower index)
+final startRank = us == 0 ? 6 : 1;          // rank index where double pushes start
+final promoRank = us == 0 ? 1 : 6;          // rank index one step before promotion
+
+int pawns = pieceBB[Piece.pawn | ourC];
+while (pawns != 0) {
+  final from = BitOps.lsb(pawns);
+  pawns &= pawns - 1;
+  final rank = from >> 3;
+  // check mask, narrowed to the pin line if this pawn is pinned
+  final allowed = checkMask & ((pinned >>> from) & 1 == 1 ? _pinRay[from] : -1);
+```
+
+Pushes (never in captures-only mode):
+
+```dart
+  if (!capturesOnly) {
+    final one = from + dir;
+    if ((occ >>> one) & 1 == 0) {                         // square ahead is empty
+      if ((allowed >>> one) & 1 == 1) {
+        rank == promoRank ? _promotions(from, one) : moves.add(Move.encode(from, one));
+      }
+      if (rank == startRank) {
+        final two = one + dir;
+        if ((occ >>> two) & 1 == 0 && (allowed >>> two) & 1 == 1) {
+          moves.add(Move.encode(from, two, 3));           // flag 3 = double push
+        }
+      }
+    }
+  }
+```
+
+Note the double push is tested separately against `allowed`: when in check, the single push may not block but the double push might.
+
+Captures:
+
+```dart
+  int captures = tables.pawnAttacks[us * 64 + from] & theirBB & allowed;
+  while (captures != 0) {
+    final to = BitOps.lsb(captures);
+    captures &= captures - 1;
+    rank == promoRank ? _promotions(from, to) : moves.add(Move.encode(from, to));
+  }
+}   // end of the pawn loop
+```
+
+```dart
+void _promotions(int from, int to) {
+  for (int flag = 4; flag <= 7; flag++) {                 // 4 Q, 5 N, 6 R, 7 B
+    moves.add(Move.encode(from, to, flag));
+  }
+}
+```
+
+*Check:* filter **Pawn**. Presets "Pinned pawn", "Position 4" (promotions), and captures-only mode (quiet promotions must not appear).
+
+---
 
 **Step 10: en passant.**
-If `board.epSquare >= 0`: `ep` is the target square and `capSq = ep + (us == 0 ? 8 : -8)` is the captured pawn. Candidates are `pawnAttacks[them * 64 + ep] & ourPawns`. Test each one exactly by playing it on a copy of the occupancy:
 
-```
-occ2 = (occ ^ (1 << from) ^ (1 << capSq)) | (1 << ep)
-attacked = (knightAttacks[ksq] & theirKnights) != 0
-        || (pawnAttacks[us * 64 + ksq] & (theirPawns & ~(1 << capSq))) != 0
-        || (rookAttacks(ksq, occ2)   & (theirRooks   | theirQueens)) != 0
-        || (bishopAttacks(ksq, occ2) & (theirBishops | theirQueens)) != 0
+*What:* the en passant capture, tested by actually simulating it.
+*Why a simulation:* en passant is the one move that removes **two** pieces from a line at once (the capturing pawn leaves, the captured pawn disappears), which can open a discovered check along a rank that no mask would catch. Playing it on a copy of the occupancy and re-asking "is my king attacked?" covers pins, the horizontal case, and removing a pawn that was giving check, all in one test.
+*Gives you:* correct en passant with no special cases.
+
+```dart
+final ep = board.epSquare;
+if (ep >= 0) {
+  final capSq = ep + (us == 0 ? 8 : -8);                  // the pawn being captured
+  // our pawns that attack the ep square = squares a THEIR pawn on ep would attack
+  int attackers = tables.pawnAttacks[them * 64 + ep] & pieceBB[Piece.pawn | ourC];
+  while (attackers != 0) {
+    final from = BitOps.lsb(attackers);
+    attackers &= attackers - 1;
+
+    // the board after the capture: our pawn moved from -> ep, their pawn on capSq removed
+    final occ2 = (occ ^ (1 << from) ^ (1 << capSq)) | (1 << ep);
+    final theirPawnsAfter = pieceBB[Piece.pawn | theirC] & ~(1 << capSq);
+
+    final attacked = (tables.knightAttacks[ksq] & pieceBB[Piece.knight | theirC]) != 0
+        || (tables.pawnAttacks[us * 64 + ksq] & theirPawnsAfter) != 0
+        || (sliders.rookAttacks(ksq, occ2) & theirRQ) != 0
+        || (sliders.bishopAttacks(ksq, occ2) & theirBQ) != 0;
+
+    if (!attacked) moves.add(Move.encode(from, ep, 1));   // flag 1 = en passant
+  }
+}
 ```
 
-Legal if not attacked. This one test handles: the horizontal discovered check when two pawns leave the same rank, a diagonal pin, and a check by the double-pushed pawn itself (removing `capSq` from the pawns). Do not try to reuse `checkMask` or `pinned` here. Emit flag 1.
+Do not reuse `checkMask` or `pinned` here: the simulation already covers them.
+*Check:* filter **EP**. Presets "En passant captures the checking pawn" (legal) and "En passant illegal (horizontal pin)" (must produce no ep move).
+
+---
 
 **Step 11: castling.**
-Only when `!inCheck && !capturesOnly`. `base = us == 0 ? 56 : 0`, require `ksq == base + 4`, rights from `board.castling` (8 = WK, 4 = WQ, 2 = BK, 1 = BQ).
 
-- King side: right set, `base + 5` and `base + 6` empty, neither attacked. Emit `ksq -> base + 6`, flag 2.
-- Queen side: right set, `base + 1`, `base + 2`, `base + 3` empty, only `base + 2` and `base + 3` attacked-tested (b-file may be attacked). Emit `ksq -> base + 2`, flag 2.
+*What:* the two castling moves per side.
+*Why last:* it needs `attackersTo`, the rights from `board.castling`, and the check state, and it is self-contained.
+*Gives you:* the complete generator.
 
-Use `isAttacked(sq, occ, us)` for the tests.
+Rules: not in check, rights present, the squares between king and rook empty, and the squares the king **passes through and lands on** not attacked. The b-file square on the queen side only has to be empty, not safe.
+
+```dart
+if (!inCheck && !capturesOnly) {
+  final base = us == 0 ? 56 : 0;                          // a1 for white, a8 for black
+  if (ksq == base + 4) {                                  // king on its home square
+    final kingSideRight = us == 0 ? 8 : 2;
+    final queenSideRight = us == 0 ? 4 : 1;
+
+    if (board.castling & kingSideRight != 0 &&
+        occ & ((1 << (base + 5)) | (1 << (base + 6))) == 0 &&
+        board.attackersTo(base + 5, occ, them) == 0 &&
+        board.attackersTo(base + 6, occ, them) == 0) {
+      moves.add(Move.encode(ksq, base + 6, 2));           // flag 2 = castling
+    }
+    if (board.castling & queenSideRight != 0 &&
+        occ & ((1 << (base + 1)) | (1 << (base + 2)) | (1 << (base + 3))) == 0 &&
+        board.attackersTo(base + 3, occ, them) == 0 &&
+        board.attackersTo(base + 2, occ, them) == 0) {
+      moves.add(Move.encode(ksq, base + 2, 2));
+    }
+  }
+}
+```
+
+Put this after the double-check early return from step 4. That is fine, because castling is illegal in check anyway (`!inCheck`).
+*Check:* filter **Castle**. Presets "Kiwipete" and "Position 4", then "Run all presets" and the random playouts button with all kinds enabled.
+
+---
 
 ### Testing as you go
 

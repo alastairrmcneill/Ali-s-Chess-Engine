@@ -54,7 +54,7 @@ class Searcher {
     bestEval = -999999999;
     bestMove = null;
 
-    final legalMoves = moveGenerator.generateLegalMoves(board);
+    final legalMoves = moveGenerator.generate(board);
     List<Move> orderedMoves = moveOrdering.orderMoves(board, legalMoves);
 
     for (int iterationDepth = 1; iterationDepth <= maxDepth; iterationDepth++) {
@@ -150,11 +150,11 @@ class Searcher {
       }
     }
 
-    final legalMoves = moveGenerator.generateLegalMoves(board);
+    final legalMoves = moveGenerator.generate(board);
 
     if (legalMoves.isEmpty) {
       // either return checkmate or stalemate
-      return moveGenerator.inCheck ? mateScore + plyFromRoot : 0;
+      return board.isInCheck() ? mateScore + plyFromRoot : 0;
     }
 
     // Checked after mate/stalemate, since a mate on the 100th half move still wins.
@@ -201,7 +201,7 @@ class Searcher {
     if (aborted) return 0;
 
     List<Move> moves = [];
-    final inCheck = moveGenerator.isInCheck(board);
+    final inCheck = board.isInCheck();
     if (inCheck) stats.qCheckNodes++;
 
     int standPat = 0;
@@ -209,13 +209,13 @@ class Searcher {
 
     if (inCheck && qDepth < qCheckDepthLimit) {
       // Can't stand pat in check, every legal reply has to be considered.
-      moves = moveGenerator.generateLegalMoves(board);
+      moves = moveGenerator.generate(board);
       if (moves.isEmpty) return mateScore + plyFromRoot;
     } else {
       // Too deep to search every evasion, but still notice checkmate.
       List<Move>? evasions;
       if (inCheck) {
-        evasions = moveGenerator.generateLegalMoves(board);
+        evasions = moveGenerator.generate(board);
         if (evasions.isEmpty) return mateScore + plyFromRoot;
       }
       stats.evaluations++;
@@ -236,7 +236,7 @@ class Searcher {
       }
 
       alpha = standPat > alpha ? standPat : alpha;
-      moves = inCheck ? _capturesOnly(evasions!) : moveGenerator.generateLegalMoves(board, includeQuietMoves: false);
+      moves = inCheck ? _capturesOnly(evasions!) : moveGenerator.generate(board, capturesOnly: true);
     }
 
     Int32List scores = _plyScores[plyFromRoot];

@@ -2,7 +2,6 @@ import 'dart:math';
 
 import 'package:ace/engines/engine_registry.dart';
 import 'package:ace/providers/game_provider.dart';
-import 'package:ace/screens/bitboard_test_screen.dart';
 import 'package:ace/screens/game_screen.dart';
 import 'package:ace/screens/engine_test_screen.dart';
 import 'package:flutter/material.dart';
@@ -163,13 +162,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         .push(MaterialPageRoute<void>(builder: (_) => EngineTestScreen(engineId: _engineId))),
                     icon: const Icon(Icons.speed_rounded),
                     label: const Text('Test engine'),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () =>
-                        Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const BitboardTestScreen())),
-                    icon: const Icon(Icons.grid_on_rounded),
-                    label: const Text('Bitboard tables'),
                   ),
                 ],
               ),

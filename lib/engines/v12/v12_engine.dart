@@ -1,7 +1,7 @@
 import 'package:ace/engines/engine_interface.dart';
+import 'package:ace/engines/v12/core/move_generator.dart';
 import 'package:ace/engines/v12/core/move.dart';
 import 'package:ace/engines/v12/core/board.dart';
-import 'package:ace/engines/v12/core/move_generator.dart';
 import 'package:ace/engines/v12/core/zobrist.dart';
 import 'package:ace/engines/v12/search/opening_book.dart';
 import 'package:ace/engines/v12/search/searcher.dart';
@@ -16,7 +16,7 @@ class V12Engine implements ChessEngine {
   String get id => 'v12';
 
   @override
-  String get displayName => 'V12 - Speed Optimisations';
+  String get displayName => 'V12 - Bitboards';
 
   @override
   void newGame() {
@@ -37,7 +37,7 @@ class V12Engine implements ChessEngine {
 
     for (final uciMove in uciMoves) {
       Move? legalMove;
-      for (final candidate in moveGenerator.generateLegalMoves(board)) {
+      for (final candidate in moveGenerator.generate(board)) {
         if (moveToUci(candidate) == uciMove) {
           legalMove = candidate;
           break;
@@ -92,14 +92,7 @@ class V12Engine implements ChessEngine {
   PerftTestResult _perft(Board board, int depth, MoveGenerator moveGenerator) {
     if (depth <= 0) return PerftTestResult(1);
 
-    final moves = moveGenerator.generateLegalMoves(board);
-
-    // Checked at every node: the cheap check test must agree with the generator's own check flag.
-    final isInCheck = moveGenerator.isInCheck(board);
-    if (isInCheck != moveGenerator.inCheck) {
-      throw StateError(
-          'Inconsistent check status: isInCheck=$isInCheck, moveGenerator.inCheck=${moveGenerator.inCheck}');
-    }
+    final moves = moveGenerator.generate(board);
 
     if (depth == 1) return PerftTestResult(moves.length);
 

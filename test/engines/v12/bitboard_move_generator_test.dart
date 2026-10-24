@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:ace/engines/v12/core/claude_bitboard_move_generator.dart';
+import 'package:ace/engines/v12/core/move_generator.dart';
 import 'package:ace/engines/v12/core/board.dart';
 import 'package:ace/engines/v12/core/move.dart';
 import 'package:ace/engines/v12/core/move_generator.dart';
@@ -27,7 +27,7 @@ const _perft = [
 ];
 
 int _perftCount(Board b, BitboardMoveGenerator gen, int depth) {
-  final moves = List<Move>.of(gen.generateLegalMoves(b));
+  final moves = List<Move>.of(gen.generate(b));
   if (depth == 1) return moves.length;
   int n = 0;
   for (final m in moves) {
@@ -37,6 +37,8 @@ int _perftCount(Board b, BitboardMoveGenerator gen, int depth) {
   }
   return n;
 }
+
+bool _isCapture(Board b, Move m) => b.squares[m.to] != 0 || m.enPassantCapture;
 
 Set<int> _set(List<Move> m) => m.map((e) => e.value).toSet();
 
@@ -53,7 +55,7 @@ void main() {
   });
 
   group('BitboardMoveGenerator vs mailbox generator', () {
-    test('random playouts: same legal moves, captures-only moves and check flags', () {
+    test('random playouts: same legal moves, captures-only moves and check status', () {
       final rng = Random(7);
       final oldGen = MoveGenerator();
       final newGen = BitboardMoveGenerator();
@@ -62,18 +64,19 @@ void main() {
         for (int game = 0; game < 25; game++) {
           final b = Board.fromFEN(fen);
           for (int ply = 0; ply < 120; ply++) {
-            for (final quiet in [true, false]) {
-              final expected = _set(List.of(oldGen.generateLegalMoves(b, includeQuietMoves: quiet)));
-              final inCheckOld = oldGen.inCheck;
-              final doubleOld = oldGen.inDoubleCheck;
-              final actual = _set(List.of(newGen.generateLegalMoves(b, includeQuietMoves: quiet)));
-              final reason = 'fen=$fen game=$game ply=$ply quiet=$quiet';
+            for (final capturesOnly in [false, true]) {
+              var expectedMoves = List.of(oldGen.generateLegalMoves(b));
+              // Old generator's quiet-less mode still returns quiet evasions when in check; new capturesOnly is strict.
+              if (capturesOnly) expectedMoves = expectedMoves.where((m) => _isCapture(b, m)).toList();
+              final expected = _set(expectedMoves);
+              final actualMoves = newGen.generate(b, capturesOnly: capturesOnly);
+              final actual = _set(actualMoves);
+              final reason = 'fen=$fen game=$game ply=$ply capturesOnly=$capturesOnly';
+              expect(actualMoves.length, actual.length, reason: 'duplicate moves, $reason');
               expect(actual, expected, reason: reason);
-              expect(newGen.inCheck, inCheckOld, reason: reason);
-              expect(newGen.inDoubleCheck, doubleOld, reason: reason);
-              expect(newGen.isInCheck(b), oldGen.isInCheck(b), reason: reason);
             }
-            final moves = newGen.generateLegalMoves(b);
+            expect(b.isInCheck(), oldGen.isInCheck(b), reason: 'fen=$fen game=$game ply=$ply');
+            final moves = newGen.generate(b);
             if (moves.isEmpty) break;
             b.makeMove(moves[rng.nextInt(moves.length)]);
             steps++;
