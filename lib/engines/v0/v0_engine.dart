@@ -58,15 +58,13 @@ class V0Engine implements ChessEngine {
     if (depth <= 0) return PerftTestResult(1);
 
     final moves = MoveGenerator().generateLegalMoves(board);
-    final loudMoves = MoveGenerator().generateLegalMoves(board, includeQuietMoves: false);
-    if (depth == 1) return PerftTestResult(moves.length, captures: loudMoves.length);
+    if (depth == 1) return PerftTestResult(moves.length);
 
     PerftTestResult result = PerftTestResult(0);
     for (final move in moves) {
       board.makeMove(move);
       final childResult = _perft(board, depth - 1);
       result.nodes += childResult.nodes;
-      result.captures = (result.captures ?? 0) + (childResult.captures ?? 0);
       board.unMakeMove(move);
     }
     return result;
