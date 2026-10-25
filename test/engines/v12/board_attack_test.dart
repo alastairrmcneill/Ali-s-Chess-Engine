@@ -91,7 +91,7 @@ void main() {
               checks++;
             }
           }
-          final moves = List.of(gen.generateLegalMoves(b));
+          final moves = List.of(gen.generate(b));
           if (moves.isEmpty) break;
           b.makeMove(moves[rng.nextInt(moves.length)]);
         }
