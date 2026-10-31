@@ -1,10 +1,16 @@
+import 'package:ace/online/supabase_config.dart';
 import 'package:ace/providers/game_provider.dart';
 import 'package:ace/screens/home_screen.dart';
 import 'package:ace/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-void main() {
+Future<void> main() async {
+  if (SupabaseConfig.isConfigured) {
+    WidgetsFlutterBinding.ensureInitialized();
+    await Supabase.initialize(url: SupabaseConfig.url, publishableKey: SupabaseConfig.publishableKey);
+  }
   runApp(const MyApp());
 }
 

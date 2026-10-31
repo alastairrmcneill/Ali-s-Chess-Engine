@@ -2,14 +2,15 @@ import 'package:ace/chess_core/rules/move.dart';
 import 'package:ace/components/piece_image.dart';
 import 'package:ace/components/square.dart';
 import 'package:ace/chess_core/notation/board_helper.dart';
-import 'package:ace/providers/game_provider.dart';
+import 'package:ace/providers/board_controller.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 class BoardView extends StatelessWidget {
-  const BoardView({super.key});
+  final BoardController controller;
 
-  Future<void> _attemptMove(BuildContext context, GameProvider game, int from, int to) async {
+  const BoardView({super.key, required this.controller});
+
+  Future<void> _attemptMove(BuildContext context, BoardController game, int from, int to) async {
     final moves = game.movesBetween(from, to);
     if (moves.isEmpty) return;
 
@@ -24,7 +25,7 @@ class BoardView extends StatelessWidget {
     game.playHumanMove(chosen);
   }
 
-  Future<Move?> _pickPromotion(BuildContext context, GameProvider game, List<Move> moves) {
+  Future<Move?> _pickPromotion(BuildContext context, BoardController game, List<Move> moves) {
     // Show queen, rook, bishop, knight in that order.
     const order = [1, 3, 4, 2];
     final sorted = [...moves]..sort((a, b) => order.indexOf(a.promotion).compareTo(order.indexOf(b.promotion)));
@@ -56,7 +57,11 @@ class BoardView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final game = context.watch<GameProvider>();
+    return ListenableBuilder(listenable: controller, builder: _buildBoard);
+  }
+
+  Widget _buildBoard(BuildContext context, Widget? child) {
+    final game = controller;
     final flipped = !game.playerIsWhite;
     final last = game.lastMove;
 
@@ -85,7 +90,7 @@ class BoardView extends StatelessWidget {
     );
   }
 
-  Widget _buildSquare(BuildContext context, GameProvider game, int index, int row, int col, double size, Move? last) {
+  Widget _buildSquare(BuildContext context, BoardController game, int index, int row, int col, double size, Move? last) {
     final rank = BoardHelper.getRankFromIndex(index);
     final file = BoardHelper.getFileFromIndex(index);
 

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:ace/chess_core/game_end.dart';
-import 'package:ace/chess_core/notation/piece.dart';
 import 'package:ace/chess_core/notation/uci.dart';
 import 'package:ace/chess_core/referee.dart';
 import 'package:ace/chess_core/rules/board.dart';
@@ -12,6 +11,7 @@ import 'package:ace/engines/engine_interface.dart';
 import 'package:ace/engines/engine_registry.dart';
 import 'package:ace/match/game_record.dart';
 import 'package:ace/match/thinking_log.dart';
+import 'package:ace/providers/board_controller.dart';
 import 'package:ace/services/engine_worker.dart';
 import 'package:flutter/foundation.dart';
 
@@ -28,14 +28,13 @@ class GameSettings {
   String get engineName => EngineRegistry.create(engineId).displayName;
 }
 
-class GameProvider extends ChangeNotifier {
+class GameProvider extends ChangeNotifier with BoardController {
   GameSettings? _settings;
   late Referee _referee;
   late Board _board;
   final MoveGenerator _moveGenerator = MoveGenerator();
   List<Move> _legalMoves = [];
   Move? _lastMove;
-  int? _selectedIndex;
   GameEnd? _gameEnd;
 
   EngineWorker? _worker;
@@ -50,10 +49,12 @@ class GameProvider extends ChangeNotifier {
   int _generation = 0;
 
   GameSettings? get settings => _settings;
+  @override
   List<int> get position => _board.position;
+  @override
   List<Move> get legalMoves => _legalMoves;
+  @override
   Move? get lastMove => _lastMove;
-  int? get selectedIndex => _selectedIndex;
   GameEnd? get gameEnd => _gameEnd;
   bool get engineThinking => _engineThinking;
   SearchStats? get stats => _stats;
@@ -65,8 +66,9 @@ class GameProvider extends ChangeNotifier {
   String? get thinkingLogPath => _thinkingFile?.path;
   int get searchesCompleted => _searchesCompleted;
   int get generation => _generation;
+  @override
   bool get playerIsWhite => _settings?.playerIsWhite ?? true;
-  int get playerColor => playerIsWhite ? Piece.white : Piece.black;
+  @override
   bool get isHumanTurn => _worker != null && _gameEnd == null && !_engineThinking && _board.whiteToPlay == playerIsWhite;
 
   /// Engine evaluation in centipawns from White's point of view (the engine reports it for the side to move).
@@ -86,7 +88,7 @@ class GameProvider extends ChangeNotifier {
     _board = Board.fromFEN(Referee.standardStartFen);
     _legalMoves = _moveGenerator.generateLegalMoves(_board);
     _lastMove = null;
-    _selectedIndex = null;
+    resetSelection();
     _gameEnd = null;
     _stats = null;
     _iterations.clear();
@@ -133,40 +135,7 @@ class GameProvider extends ChangeNotifier {
     super.dispose();
   }
 
-  bool canPickUp(int index) {
-    if (!isHumanTurn) return false;
-    final piece = _board.position[index];
-    return piece != Piece.none && Piece.isColor(piece, playerColor);
-  }
-
-  void select(int index) {
-    if (!isHumanTurn) return;
-    _selectedIndex = canPickUp(index) && _selectedIndex != index ? index : null;
-    notifyListeners();
-  }
-
-  /// Like [select] but never deselects, so starting a drag on the already selected piece keeps it selected.
-  void pickUp(int index) {
-    if (!canPickUp(index) || _selectedIndex == index) return;
-    _selectedIndex = index;
-    notifyListeners();
-  }
-
-  void clearSelection() {
-    if (_selectedIndex == null) return;
-    _selectedIndex = null;
-    notifyListeners();
-  }
-
-  /// Legal moves from [from] to [to]. More than one means the move is a promotion and a piece must be chosen.
-  List<Move> movesBetween(int from, int to) =>
-      _legalMoves.where((m) => m.startingSquare == from && m.targetSquare == to).toList();
-
-  bool isTargetOfSelected(int index) {
-    final from = _selectedIndex;
-    return from != null && isHumanTurn && movesBetween(from, index).isNotEmpty;
-  }
-
+  @override
   void playHumanMove(Move move) {
     if (!isHumanTurn) return;
     _applyMove(move);
@@ -176,7 +145,7 @@ class GameProvider extends ChangeNotifier {
     _referee.tryPlayUci(_toUci(move));
     _board.makeMove(move);
     _lastMove = move;
-    _selectedIndex = null;
+    resetSelection();
     _legalMoves = _moveGenerator.generateLegalMoves(_board);
     _gameEnd = _referee.checkGameEnd();
     notifyListeners();

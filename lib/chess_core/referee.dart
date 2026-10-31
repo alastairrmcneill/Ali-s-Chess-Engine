@@ -36,6 +36,8 @@ class Referee {
 
   List<Move> _legal() => _legalCache ??= _moveGenerator.generateLegalMoves(_board);
   List<String> get uciHistory => _uciHistory;
+  List<int> get position => _board.position;
+  List<Move> get legalMoves => _legal();
   List<String> get sanHistory => _sanHistory;
   bool get whiteToMove => _board.whiteToPlay;
   int get pliesPlayed => _uciHistory.length;

@@ -4,6 +4,7 @@ import 'package:ace/engines/engine_registry.dart';
 import 'package:ace/providers/game_provider.dart';
 import 'package:ace/screens/game_screen.dart';
 import 'package:ace/screens/engine_test_screen.dart';
+import 'package:ace/screens/online_lobby_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -154,6 +155,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: const Padding(
                       padding: EdgeInsets.symmetric(vertical: 14),
                       child: Text('New game', style: TextStyle(fontSize: 18)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: () =>
+                        Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const OnlineLobbyScreen())),
+                    icon: const Icon(Icons.public_rounded),
+                    label: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      child: Text('Play a friend online', style: TextStyle(fontSize: 18)),
                     ),
                   ),
                   const SizedBox(height: 12),

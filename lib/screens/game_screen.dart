@@ -173,7 +173,7 @@ class _GameScreenState extends State<GameScreen> {
                         children: [
                           header,
                           const SizedBox(height: 12),
-                          const BoardView()
+                          BoardView(controller: game)
                         ],
                       ),
                     ),
@@ -192,7 +192,7 @@ class _GameScreenState extends State<GameScreen> {
                 children: [
                   header,
                   const SizedBox(height: 12),
-                  const BoardView(),
+                  BoardView(controller: game),
                   const SizedBox(height: 16),
                   const _GameStatsPanel(),
                 ],
